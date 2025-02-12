@@ -1,5 +1,6 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+
+import { useEffect, useState } from 'react';
 import { BrowserProvider, Contract, ethers } from 'ethers';
 import { AlertCircle, Wallet, ArrowRightLeft, Lock, Unlock } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,195 +8,128 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-
-declare global {
-  interface Window {
-    ethereum?: any;
-  }
-}
-
-interface Transaction {
-  lockHash?: string;
-  mintHash?: string;
-  burnHash?: string;
-  unlockHash?: string;
-  timestamp: number;
-  sender: string;
-  receiver: string;
-  tokenId: string;
-  type: 'Create and Mint Token on Chain A' | 'Lock on Chain A and Mint Token on Chain B' | 'Unlock on Chain A and Burn on Chain B';
-  status: 'Completed' | 'Failed' | 'Pending';
-}
-
-interface ContractError extends Error {
-  data?: {
-    data?: string;
-    reason?: string;
-  },
-  reason?: string;
-}
-
-const lockingContractABI = [
-  "function mint(address to, uint256 tokenId) external",
-  "function lockToken(uint256 tokenId, address receiver) external",
-  "function unlockToken(uint256 tokenId) external",
-  "function lockedTokens(uint256) public view returns (bool)",
-  "function ownerOf(uint256) public view returns (address)",
-  "event TokenLocked(uint256 indexed tokenId, address indexed sender, address indexed receiver, uint256 timestamp)",
-  "event TokenMinted(uint256 indexed tokenId, address indexed receiver, uint256 timestamp)"
-];
-
-const mintingContractABI = [
-  "function mintToken(uint256 tokenId, address receiver) external",
-  "function burnToken(uint256 tokenId) external",
-  "function mintedTokens(uint256) public view returns (bool)",
-  "event TokenMinted(uint256 indexed tokenId, address indexed receiver, uint256 timestamp)"
-];
+import { CONSTANTS } from '@/lib/constants';
+import { LOCKING_CONTRACT_ABI, MINTING_CONTRACT_ABI } from '@/lib/contracts';
+import { decodeError, truncateAddress, getExplorerLink } from '@/lib/utils';
+import { Transaction, ContractError } from '@/types';
 
 export default function Home() {
+  // State Management
   const [userAddress, setUserAddress] = useState<string>("");
   const [provider, setProvider] = useState<BrowserProvider | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [tokenId, setTokenId] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>("");
+  const [currentChain, setCurrentChain] = useState<string>("");
 
-  const LOCKING_CONTRACT: string = "0x6a9838d3840caa43461a4b1ae273f19cecf4747c";
-  const MINTING_CONTRACT: string = "0x348bac76cfffc8fba629b399f51a81b663f80a8a";
-  const AMOY_CHAIN_ID: string = "0x13882"; 
-  const AMOY_RPC_URL: string = "https://rpc-amoy.polygon.technology";
-  const CONTACT_URL: string = "https://amoy.polygonscan.com/"
-  const AMOY_SYMBOL: string = "POL";
-  const AMOY_NAME: string = "Amoy";
-  const CHAIN_NAME: string = "Polygon Amoy";
+  // Chain Management
+  useEffect(() => {
+    const updateChain = async () => {
+      if (provider) {
+        const network = await provider.getNetwork();
+        const chainId = "0x" + network.chainId.toString(16);
+        setCurrentChain(
+          chainId === CONSTANTS.AMOY_CHAIN_ID ? "Polygon Amoy" :
+          chainId === CONSTANTS.CARDONA_CHAIN_ID ? "Polygon zkEVM Cardona Testnet" :
+          "Unknown Chain"
+        );
+      }
+    };
 
-  const decodeError = (error: ContractError): string => {
-    if (error.data) {
-      try {
-        const errorReason = error.reason;
-        if (errorReason === "Token already minted") {
-          return "Token already minted";
-        }
-        if (errorReason === "rejected") {
-          return "Transaction rejected";
-        }
-        if (errorReason === "Insufficient balance to mint") {
-          return "Insufficient balance to mint";
-        }
-      } catch (e) {
-        console.error("Error decoding:", e);
+    updateChain();
+    window.ethereum?.on('chainChanged', updateChain);
+    return () => {
+      window.ethereum?.removeListener('chainChanged', updateChain);
+    };
+  }, [provider]);
+
+  // Chain Switching
+  const switchToChain = async (chainType: 'AMOY' | 'CARDONA') => {
+    const config = CONSTANTS.CHAIN_CONFIG[chainType];
+    try {
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: config.chainId }],
+      });
+    } catch (switchError: any) {
+      if (switchError.code === 4902) {
+        await window.ethereum.request({
+          method: 'wallet_addEthereumChain',
+          params: [config],
+        });
+      } else {
+        throw switchError;
       }
     }
-
-    // Handle MetaMask specific errors
-    if (error.message?.includes("user denied") || error.message?.includes("User rejected")) {
-      return "Transaction was rejected by user";
-    }
-    if (error.message?.includes("insufficient funds")) {
-      return "Insufficient funds for transaction";
-    }
-    if (error.message?.includes("nonce")) {
-      return "Transaction nonce error. Please reset your MetaMask account";
-    }
-
-    return error.message || "Unknown error occurred";
   };
 
+  // Wallet Connection
   const connectWallet = async () => {
     setErrorMessage("");
-    if (typeof window !== 'undefined' && window.ethereum) {
-      try {
-        const provider = new BrowserProvider(window.ethereum);
-        const network = await provider.getNetwork();
-        const chainId = network.chainId.toString();
-
-        if (chainId !== AMOY_CHAIN_ID) {
-          try {
-            await window.ethereum.request({
-              method: 'wallet_switchEthereumChain',
-              params: [{ chainId: AMOY_CHAIN_ID }],
-            });
-          } catch (switchError: any) {
-            if (switchError.code === 4902) {
-              await window.ethereum.request({
-                method: 'wallet_addEthereumChain',
-                params: [{
-                  chainId: AMOY_CHAIN_ID,
-                  chainName: CHAIN_NAME,
-                  nativeCurrency: {
-                    name: AMOY_NAME,
-                    symbol: AMOY_SYMBOL,
-                    decimals: 18,
-                  },
-                  rpcUrls: [AMOY_RPC_URL],
-                  blockExplorerUrls: [CONTACT_URL],
-                }],
-              });
-            } else {
-              throw switchError;
-            }
-          }
-        }
-
-        await provider.send("eth_requestAccounts", []);
-        const signer = await provider.getSigner();
-        const address = await signer.getAddress();
-
-        setUserAddress(address);
-        setProvider(provider);
-
-        window.ethereum.on('chainChanged', (chainId: string) => {
-          window.location.reload();
-        });
-      } catch (error) {
-        console.error("Error connecting wallet:", error);
-        setErrorMessage(`Failed to connect wallet: ${(error as Error).message}`);
-      }
-    } else {
+    if (typeof window === 'undefined' || !window.ethereum) {
       setErrorMessage("Please install MetaMask!");
+      return;
+    }
+
+    try {
+      const provider = new BrowserProvider(window.ethereum, "any");
+      await provider.send("eth_requestAccounts", []);
+      const signer = await provider.getSigner();
+      const address = await signer.getAddress();
+
+      setUserAddress(address);
+      setProvider(provider);
+
+      // Switch to Amoy chain by default
+      await switchToChain('AMOY');
+
+      window.ethereum.on('accountsChanged', () => {
+        window.location.reload();
+      });
+    } catch (error) {
+      console.error("Error connecting wallet:", error);
+      setErrorMessage(`Failed to connect wallet: ${(error as Error).message}`);
     }
   };
 
+  // Token Ownership Check
   const checkTokenOwnership = async (contract: Contract, tokenId: string): Promise<boolean> => {
     try {
       const owner = await contract.ownerOf(tokenId);
-      console.log("Owner:", owner);
-      if (!owner) return false;
       return owner.toLowerCase() === userAddress.toLowerCase();
-    } catch (error) {
-      console.error("Error checking token ownership:", "You don't own this token");
+    } catch {
       return false;
     }
   };
 
+  // Mint Token
   const mintToken = async () => {
     setErrorMessage("");
-    if (!tokenId || isNaN(Number(tokenId)) || !provider) {
+    if (!tokenId || !provider) {
       setErrorMessage("Please enter a valid token ID and connect your wallet");
       return;
     }
     setIsLoading(true);
 
     try {
+      await switchToChain('AMOY');
       const signer = await provider.getSigner();
-      const lockingContract = new Contract(LOCKING_CONTRACT, lockingContractABI, signer);
+      const lockingContract = new Contract(CONSTANTS.LOCKING_CONTRACT, LOCKING_CONTRACT_ABI, signer);
 
-      console.log("Minting token...");
       const mintTx = await lockingContract.mint(userAddress, tokenId);
-      await mintTx.wait();
-      console.log("Token minted successfully");
+      const receipt = await mintTx.wait();
 
-      const receipt: Transaction = {
+      setTransactions(prev => [...prev, {
         mintHash: mintTx.hash,
         timestamp: Date.now(),
         sender: userAddress,
         receiver: userAddress,
-        tokenId: tokenId,
+        tokenId,
         type: 'Create and Mint Token on Chain A',
         status: 'Completed'
-      };
+      }]);
 
-      setTransactions(prev => [...prev, receipt]);
       alert("Token minted successfully!");
     } catch (error) {
       console.error("Error:", error);
@@ -205,48 +139,55 @@ export default function Home() {
     }
   };
 
+  // Lock and Mint
   const lockAndMint = async () => {
     setErrorMessage("");
-    if (!tokenId || isNaN(Number(tokenId)) || !provider) {
+    if (!tokenId || !provider) {
       setErrorMessage("Please enter a valid token ID and connect your wallet");
       return;
     }
     setIsLoading(true);
-
+  
     try {
-      const signer = await provider.getSigner();
-      const lockingContract = new Contract(LOCKING_CONTRACT, lockingContractABI, signer);
-      const mintingContract = new Contract(MINTING_CONTRACT, mintingContractABI, signer);
-
+      // Step 1: Lock on Chain A
+      await switchToChain('AMOY');
+      const signerA = await provider.getSigner();
+      const lockingContract = new Contract(CONSTANTS.LOCKING_CONTRACT, LOCKING_CONTRACT_ABI, signerA);
+  
+      // Check ownership and lock status
       const isOwner = await checkTokenOwnership(lockingContract, tokenId);
-      console.log(isOwner);
-      if (!isOwner) {
-        throw new Error("You don't own this token");
-      }
-
+      if (!isOwner) throw new Error("You don't own this token");
+  
       const isLocked = await lockingContract.lockedTokens(tokenId);
-      if (isLocked) {
-        throw new Error("Token is already locked");
-      }
-      console.log("Locking token...");
-      const lockTx = await lockingContract.lockToken(tokenId, userAddress);
+      if (isLocked) throw new Error("Token is already locked");
+  
+      // Encode the function call for debugging
+      const data = lockingContract.interface.encodeFunctionData("lockToken", [tokenId, userAddress]);
+      console.log("Transaction Data:", data);
+  
+      // Send the transaction with increased gas limit
+      const lockTx = await lockingContract.lockToken(tokenId, userAddress, { gasLimit: 500000 });
       await lockTx.wait();
-      console.log("Token locked successfully");
-      console.log("Minting token...");
-      const mintTx = await mintingContract.mintToken(tokenId, userAddress);
+  
+      // Step 2: Mint on Chain B
+      await switchToChain('CARDONA');
+      const signerB = await provider.getSigner();
+      const mintingContract = new Contract(CONSTANTS.MINTING_CONTRACT, MINTING_CONTRACT_ABI, signerB);
+  
+      const mintTx = await mintingContract.mintToken(tokenId, userAddress, { gasLimit: 500000 });
       await mintTx.wait();
-      console.log("Token minted successfully");
-      const receipt: Transaction = {
+  
+      setTransactions(prev => [...prev, {
         lockHash: lockTx.hash,
         mintHash: mintTx.hash,
         timestamp: Date.now(),
         sender: userAddress,
         receiver: userAddress,
-        tokenId: tokenId,
+        tokenId,
         type: 'Lock on Chain A and Mint Token on Chain B',
         status: 'Completed'
-      };
-      setTransactions(prev => [...prev, receipt]);
+      }]);
+  
       alert("Token locked and minted successfully!");
     } catch (error) {
       console.error("Error:", error);
@@ -256,51 +197,43 @@ export default function Home() {
     }
   };
 
+  // Unlock and Burn
   const unlockAndBurn = async () => {
     setErrorMessage("");
-    if (!tokenId || isNaN(Number(tokenId)) || !provider) {
+    if (!tokenId || !provider) {
       setErrorMessage("Please enter a valid token ID and connect your wallet");
       return;
     }
     setIsLoading(true);
 
     try {
-      const signer = await provider.getSigner();
-      const lockingContract = new Contract(LOCKING_CONTRACT, lockingContractABI, signer);
-      const mintingContract = new Contract(MINTING_CONTRACT, mintingContractABI, signer);
+      // Step 1: Burn on Chain B
+      await switchToChain('CARDONA');
+      const signerB = await provider.getSigner();
+      const mintingContract = new Contract(CONSTANTS.MINTING_CONTRACT, MINTING_CONTRACT_ABI, signerB);
 
-      const isLocked = await lockingContract.lockedTokens(tokenId);
-      if (!isLocked) {
-        throw new Error("Token is not locked");
-      }
-
-      const isMinted = await mintingContract.mintedTokens(tokenId);
-      if (!isMinted) {
-        throw new Error("Token is not minted on Chain B");
-      }
-
-      console.log("Burning token...");
       const burnTx = await mintingContract.burnToken(tokenId);
       await burnTx.wait();
-      console.log("Token burned successfully");
 
-      console.log("Unlocking token...");
+      // Step 2: Unlock on Chain A
+      await switchToChain('AMOY');
+      const signerA = await provider.getSigner();
+      const lockingContract = new Contract(CONSTANTS.LOCKING_CONTRACT, LOCKING_CONTRACT_ABI, signerA);
+
       const unlockTx = await lockingContract.unlockToken(tokenId);
       await unlockTx.wait();
-      console.log("Token unlocked successfully");
 
-      const receipt: Transaction = {
+      setTransactions(prev => [...prev, {
         burnHash: burnTx.hash,
         unlockHash: unlockTx.hash,
         timestamp: Date.now(),
         sender: userAddress,
         receiver: userAddress,
-        tokenId: tokenId,
+        tokenId,
         type: 'Unlock on Chain A and Burn on Chain B',
         status: 'Completed'
-      };
+      }]);
 
-      setTransactions(prev => [...prev, receipt]);
       alert("Token burned and unlocked successfully!");
     } catch (error) {
       console.error("Error:", error);
@@ -310,16 +243,8 @@ export default function Home() {
     }
   };
 
-  const truncateAddress = (address: string) => {
-    return `${address.slice(0, 6)}...${address.slice(-4)}`;
-  };
-
-  const getTransactionExplorerLink = (hash: string) => {
-    return `${CONTACT_URL}/tx/${hash}`;
-  };
-
   return (
-    <main className="min-h-screen p-8">
+    <main className="min-h-screen p-8 ">
       <div className="max-w-4xl mx-auto space-y-8">
         <Card>
           <CardHeader>
@@ -328,16 +253,16 @@ export default function Home() {
               Cross-Chain Bridge
             </CardTitle>
             <CardDescription>
-              Transfer tokens securely between Chain A and Chain B
+              Transfer tokens between Polygon Amoy and zkEVM Cardona
             </CardDescription>
           </CardHeader>
           <CardContent>
             {!userAddress ? (
               <div className="space-y-4 text-center py-8">
-                <Wallet className="h-16 w-16 mx-auto" />
+                <Wallet className="h-16 w-16 mx-auto text-gray-400" />
                 <h3 className="text-lg font-medium">Connect Your Wallet</h3>
                 <p className="text-gray-500 dark:text-gray-400">
-                  Please make sure you have MetaMask installed and connect your wallet to continue
+                  Please connect your wallet to continue
                 </p>
                 <Button 
                   size="lg"
@@ -350,24 +275,28 @@ export default function Home() {
               </div>
             ) : (
               <div className="space-y-6">
-                <Alert>
-                  <Wallet className="h-4 w-4" />
-                  <AlertTitle>Connected Wallet</AlertTitle>
-                  <AlertDescription>
-                    {truncateAddress(userAddress)}
-                  </AlertDescription>
-                </Alert>
+                <div className="flex gap-4">
+                  <Alert>
+                    <Wallet className="h-4 w-4" />
+                    <AlertTitle>Connected Wallet</AlertTitle>
+                    <AlertDescription>
+                      {truncateAddress(userAddress)}
+                    </AlertDescription>
+                  </Alert>
+                  <Alert>
+                    <AlertTitle>Current Chain</AlertTitle>
+                    <AlertDescription>{currentChain}</AlertDescription>
+                  </Alert>
+                </div>
 
                 <div className="grid gap-4">
-                  <div className="flex gap-4">
-                    <Input
-                      type="number"
-                      placeholder="Enter Token ID"
-                      value={tokenId}
-                      onChange={(e) => setTokenId(e.target.value)}
-                      className="flex-1"
-                    />
-                  </div>
+                  <Input
+                    type="number"
+                    placeholder="Enter Token ID"
+                    value={tokenId}
+                    onChange={(e) => setTokenId(e.target.value)}
+                    className="flex-1"
+                  />
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <Button
@@ -446,8 +375,8 @@ export default function Home() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {transactions.map((tx) => (
-                  <Card key={tx.timestamp}>
+                {transactions.map((tx, index) => (
+                  <Card key={index}>
                     <CardHeader>
                       <CardTitle className="text-lg">{tx.type}</CardTitle>
                       <CardDescription>
@@ -457,7 +386,7 @@ export default function Home() {
                     <CardContent className="grid gap-2 text-sm">
                       {tx.lockHash && (
                         <a
-                          href={getTransactionExplorerLink(tx.lockHash)}
+                          href={getExplorerLink(tx.lockHash, CONSTANTS.AMOY_CHAIN_ID)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-500 hover:underline"
@@ -467,7 +396,7 @@ export default function Home() {
                       )}
                       {tx.mintHash && (
                         <a
-                          href={getTransactionExplorerLink(tx.mintHash)}
+                          href={getExplorerLink(tx.mintHash, tx.type.includes('Chain B') ? CONSTANTS.CARDONA_CHAIN_ID : CONSTANTS.AMOY_CHAIN_ID)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-500 hover:underline"
@@ -477,7 +406,7 @@ export default function Home() {
                       )}
                       {tx.burnHash && (
                         <a
-                          href={getTransactionExplorerLink(tx.burnHash)}
+                          href={getExplorerLink(tx.burnHash, CONSTANTS.CARDONA_CHAIN_ID)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-500 hover:underline"
@@ -487,7 +416,7 @@ export default function Home() {
                       )}
                       {tx.unlockHash && (
                         <a
-                          href={getTransactionExplorerLink(tx.unlockHash)}
+                          href={getExplorerLink(tx.unlockHash, CONSTANTS.AMOY_CHAIN_ID)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-500 hover:underline"
