@@ -25,8 +25,58 @@ import { CONSTANTS } from "@/lib/constants";
 import { LOCKING_CONTRACT_ABI, MINTING_CONTRACT_ABI } from "@/lib/contracts";
 import { decodeError, truncateAddress, getExplorerLink } from "@/lib/utils";
 import { Transaction, ContractError } from "@/types";
-import {verifyOnChainMerkleProof} from "@/utils/merkelUtils";
-import { ethers } from 'ethers';
+import { ethers } from "ethers";
+
+// -----------------------------------------------------------------------------
+// New: MerkleVerifier ABI & on-chain proof verification utility
+// -----------------------------------------------------------------------------
+const MERKLE_VERIFIER_ABI = [
+  "function verifyProof(bytes32[] calldata proof, bytes32 leaf) external view returns (bool)",
+];
+
+async function verifyOnChainMerkleProof(
+  proof: string[],
+  leaf: string,
+  verifierAddress: string,
+  provider: BrowserProvider
+): Promise<boolean> {
+  try {
+    const signer = await provider.getSigner();
+    const verifierContract = new Contract(
+      verifierAddress,
+      MERKLE_VERIFIER_ABI,
+      signer
+    );
+    const isValid = await verifierContract.verifyProof(proof, leaf);
+    return isValid;
+  } catch (err) {
+    console.error("Error verifying Merkle proof on-chain:", err);
+    return false;
+  }
+}
+
+// Example call from your frontend (e.g., in your mintToken function)
+async function fetchMerkleProof(
+  tokenId: string,
+  userAddress: string
+): Promise<{ proof: string[]; merkleRoot: string } | null> {
+  try {
+    const res = await fetch("/api/getMerkleProof", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tokenId, userAddress }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      console.error("Error fetching Merkle proof:", err.error);
+      return null;
+    }
+    return await res.json();
+  } catch (err) {
+    console.error("Error in fetchMerkleProof:", err);
+    return null;
+  }
+}
 
 export default function CrossChainBridge() {
   const [userAddress, setUserAddress] = useState<string>("");
@@ -80,8 +130,8 @@ export default function CrossChainBridge() {
     }
   }, []);
 
-    // Connect wallet using wallet_request
-    const connectWallet = useCallback(async () => {
+  // Connect wallet using wallet_request
+  const connectWallet = useCallback(async () => {
     setErrorMessage("");
     if (typeof window === "undefined" || !window.ethereum) {
       setErrorMessage("Please install MetaMask!");
@@ -170,11 +220,20 @@ export default function CrossChainBridge() {
     }
     setIsLoading(true);
 
-    // Assume you compute a leaf hash (e.g. keccak256 hash of tokenId + userAddress)
-    const leaf = ethers.keccak256(ethers.toUtf8Bytes(`${tokenId}-${userAddress}`));
-    // Assume you obtain the proof array from your backend or off-chain process
-    const proof:any[] = [/* array of hex string values */];
-    const verifierAddress = '0xYourDeployedMerkleVerifierAddress';
+    // Compute a leaf hash (e.g. keccak256 hash of tokenId + userAddress)
+    const leaf = ethers.keccak256(
+      ethers.toUtf8Bytes(`${tokenId}-${userAddress}`)
+    );
+    // NOTE: In a real scenario, obtain the proof array from your backend or off‑chain process.
+    const proof: any = await fetchMerkleProof(tokenId, userAddress);
+    if (!proof) {
+      setErrorMessage("Failed to fetch Merkle proof");
+      setIsLoading(false);
+      return;
+    }
+
+    // Replace with your deployed MerkleVerifier contract address.
+    const verifierAddress = "0xYourDeployedMerkleVerifierAddress";
 
     const pendingRecord = await insertTransactionRecord({
       type: "Create and Mint Token on Chain A",
@@ -182,11 +241,25 @@ export default function CrossChainBridge() {
       status: "Pending",
     });
     try {
-        // Verify the merkle proof on-chain
-        const isValid = await verifyOnChainMerkleProof(proof, leaf, verifierAddress);
-        if (!isValid) {
-        throw new Error('Merkle proof verification failed');
-        }
+      // Verify the Merkle proof on-chain.
+      // We pass the current provider so the call happens on the connected chain.
+      const isValid = await verifyOnChainMerkleProof(
+        proof,
+        leaf,
+        verifierAddress,
+        provider
+      );
+      if (!isValid) {
+        //update transaction table
+        const cancelledRecord = await updateTransactionRecord(
+          pendingRecord.id,
+          {
+            status: "Failed",
+          }
+        );
+
+        throw new Error("Merkle proof verification failed");
+      }
 
       await switchToChain("AMOY");
       const signer = await provider.getSigner();
