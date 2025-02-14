@@ -1,9 +1,14 @@
-// File: components/CrossChainBridge.tsx
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { BrowserProvider, Contract } from 'ethers';
-import { AlertCircle, Wallet, ArrowRightLeft, Lock, Unlock } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from "react";
+import { BrowserProvider, Contract } from "ethers";
+import {
+  AlertCircle,
+  Wallet,
+  ArrowRightLeft,
+  Lock,
+  Unlock,
+} from "lucide-react";
 import {
   Card,
   CardHeader,
@@ -11,79 +16,80 @@ import {
   CardContent,
   CardDescription,
   CardFooter,
-} from '@/components/ui/card';
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
-import { CONSTANTS } from '@/lib/constants';
-import { LOCKING_CONTRACT_ABI, MINTING_CONTRACT_ABI } from '@/lib/contracts';
-import { decodeError, truncateAddress, getExplorerLink } from '@/lib/utils';
-import { Transaction, ContractError } from '@/types';
+} from "@/components/ui/card";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { CONSTANTS } from "@/lib/constants";
+import { LOCKING_CONTRACT_ABI, MINTING_CONTRACT_ABI } from "@/lib/contracts";
+import { decodeError, truncateAddress, getExplorerLink } from "@/lib/utils";
+import { Transaction, ContractError } from "@/types";
+import {verifyOnChainMerkleProof} from "@/utils/merkelUtils";
+import { ethers } from 'ethers';
 
 export default function CrossChainBridge() {
-  const [userAddress, setUserAddress] = useState<string>('');
+  const [userAddress, setUserAddress] = useState<string>("");
   const [provider, setProvider] = useState<BrowserProvider | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [tokenId, setTokenId] = useState<string>('');
+  const [tokenId, setTokenId] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [errorMessage, setErrorMessage] = useState<string>('');
-  const [currentChain, setCurrentChain] = useState<string>('');
+  const [errorMessage, setErrorMessage] = useState<string>("");
+  const [currentChain, setCurrentChain] = useState<string>("");
 
-  // Update current chain when provider is available.
-  useEffect(() => {
-    const updateChain = async () => {
-      if (provider) {
-        const network = await provider.getNetwork();
-        const chainId = '0x' + network.chainId.toString(16);
-        setCurrentChain(
-          chainId === CONSTANTS.AMOY_CHAIN_ID
-            ? 'Polygon Amoy'
-            : chainId === CONSTANTS.CARDONA_CHAIN_ID
-            ? 'Polygon zkEVM Cardona Testnet'
-            : 'Unknown Chain'
-        );
-      }
-    };
-
-    updateChain();
-    window.ethereum?.on('chainChanged', updateChain);
-    return () => {
-      window.ethereum?.removeListener('chainChanged', updateChain);
-    };
+  // Update current chain information using the provider.
+  const updateChain = useCallback(async () => {
+    if (provider) {
+      const network = await provider.getNetwork();
+      const chainId = "0x" + network.chainId.toString(16);
+      setCurrentChain(
+        chainId === CONSTANTS.AMOY_CHAIN_ID
+          ? "Polygon Amoy"
+          : chainId === CONSTANTS.CARDONA_CHAIN_ID
+          ? "Polygon zkEVM Cardona Testnet"
+          : "Unknown Chain"
+      );
+    }
   }, [provider]);
 
-  // Helper: Switch chain.
-  const switchToChain = async (chainType: 'AMOY' | 'CARDONA') => {
+  useEffect(() => {
+    updateChain();
+    window.ethereum?.on("chainChanged", updateChain);
+    return () => {
+      window.ethereum?.removeListener("chainChanged", updateChain);
+    };
+  }, [updateChain]);
+
+  // Helper: Switch chain using wallet_switchEthereumChain (and add if needed).
+  const switchToChain = useCallback(async (chainType: "AMOY" | "CARDONA") => {
     const config = CONSTANTS.CHAIN_CONFIG[chainType];
     try {
       await window.ethereum.request({
-        method: 'wallet_switchEthereumChain',
+        method: "wallet_switchEthereumChain",
         params: [{ chainId: config.chainId }],
       });
     } catch (switchError: any) {
       if (switchError.code === 4902) {
         await window.ethereum.request({
-          method: 'wallet_addEthereumChain',
+          method: "wallet_addEthereumChain",
           params: [config],
         });
       } else {
         throw switchError;
       }
     }
-  };
+  }, []);
 
-  // Connect wallet.
-  const connectWallet = async () => {
-    setErrorMessage('');
-    if (typeof window === 'undefined' || !window.ethereum) {
-      setErrorMessage('Please install MetaMask!');
+    // Connect wallet using wallet_request
+    const connectWallet = useCallback(async () => {
+    setErrorMessage("");
+    if (typeof window === "undefined" || !window.ethereum) {
+      setErrorMessage("Please install MetaMask!");
       return;
     }
-
     try {
-      const provider = new BrowserProvider(window.ethereum, 'any');
-      await provider.send('eth_requestAccounts', []);
+      const provider = new BrowserProvider(window.ethereum, "any");
+      await provider.send("eth_requestAccounts", []);
       const signer = await provider.getSigner();
       const address = await signer.getAddress();
 
@@ -91,85 +97,108 @@ export default function CrossChainBridge() {
       setProvider(provider);
 
       // Switch to Amoy chain by default.
-      await switchToChain('AMOY');
+      await switchToChain("AMOY");
 
-      window.ethereum.on('accountsChanged', () => {
-        window.location.reload();
+      window.ethereum.on("accountsChanged", (accounts: string[]) => {
+        if (accounts.length > 0) {
+          setUserAddress(accounts[0]);
+          updateChain();
+        } else {
+          setUserAddress("");
+        }
       });
     } catch (error) {
-      console.error('Error connecting wallet:', error);
+      console.error("Error connecting wallet:", error);
       setErrorMessage(`Failed to connect wallet: ${(error as Error).message}`);
     }
-  };
+  }, [switchToChain, updateChain]);
 
-  // Helper: Check token ownership.
-  const checkTokenOwnership = async (contract: Contract, tokenId: string): Promise<boolean> => {
-    try {
-      const owner = await contract.ownerOf(tokenId);
-      return owner.toLowerCase() === userAddress.toLowerCase();
-    } catch {
-      return false;
-    }
-  };
+  // Check token ownership using the ERC721 ownerOf method.
+  const checkTokenOwnership = useCallback(
+    async (contract: Contract, tokenId: string): Promise<boolean> => {
+      try {
+        const owner = await contract.ownerOf(tokenId);
+        return owner.toLowerCase() === userAddress.toLowerCase();
+      } catch {
+        return false;
+      }
+    },
+    [userAddress]
+  );
 
-  // Helper: Insert a transaction record (returns inserted record).
-  const insertTransactionRecord = async (transactionData: Partial<Transaction>) => {
-    try {
-      const res = await fetch('/api/transactions/insert', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(transactionData),
-      });
-      const data = await res.json();
-      return data.transaction;
-    } catch (err) {
-      console.error('Failed to insert transaction record:', err);
-      return null;
-    }
-  };
+  // Insert a transaction record via API.
+  const insertTransactionRecord = useCallback(
+    async (transactionData: Partial<Transaction>) => {
+      try {
+        const res = await fetch("/api/transactions/insert", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(transactionData),
+        });
+        const data = await res.json();
+        return data.transaction;
+      } catch (err) {
+        console.error("Failed to insert transaction record:", err);
+        return null;
+      }
+    },
+    []
+  );
 
-  // Helper: Update a transaction record.
-  const updateTransactionRecord = async (id: string, transactionData: Partial<Transaction>) => {
-    try {
-      await fetch('/api/transactions/update', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, ...transactionData }),
-      });
-    } catch (err) {
-      console.error('Failed to update transaction record:', err);
-    }
-  };
+  // Update a transaction record via API.
+  const updateTransactionRecord = useCallback(
+    async (id: string, transactionData: Partial<Transaction>) => {
+      try {
+        await fetch("/api/transactions/update", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, ...transactionData }),
+        });
+      } catch (err) {
+        console.error("Failed to update transaction record:", err);
+      }
+    },
+    []
+  );
 
-  // Mint Token Functionality.
-  const mintToken = async () => {
-    setErrorMessage('');
+  // Create & Mint token on Chain A.
+  const mintToken = useCallback(async () => {
+    setErrorMessage("");
     if (!tokenId || !provider) {
-      setErrorMessage('Please enter a valid token ID and connect your wallet');
+      setErrorMessage("Please enter a valid token ID and connect your wallet");
       return;
     }
     setIsLoading(true);
 
-    // Insert a pending record.
-    const pendingRecord = await insertTransactionRecord({
-      type: 'Create and Mint Token on Chain A',
-      tokenId,
-      status: 'Pending',
-    });
+    // Assume you compute a leaf hash (e.g. keccak256 hash of tokenId + userAddress)
+    const leaf = ethers.keccak256(ethers.toUtf8Bytes(`${tokenId}-${userAddress}`));
+    // Assume you obtain the proof array from your backend or off-chain process
+    const proof:any[] = [/* array of hex string values */];
+    const verifierAddress = '0xYourDeployedMerkleVerifierAddress';
 
+    const pendingRecord = await insertTransactionRecord({
+      type: "Create and Mint Token on Chain A",
+      tokenId,
+      status: "Pending",
+    });
     try {
-      await switchToChain('AMOY');
+        // Verify the merkle proof on-chain
+        const isValid = await verifyOnChainMerkleProof(proof, leaf, verifierAddress);
+        if (!isValid) {
+        throw new Error('Merkle proof verification failed');
+        }
+
+      await switchToChain("AMOY");
       const signer = await provider.getSigner();
       const lockingContract = new Contract(
         CONSTANTS.LOCKING_CONTRACT,
         LOCKING_CONTRACT_ABI,
         signer
       );
-
-      const mintTx = await lockingContract.mint(userAddress, tokenId);
+      const mintTx = await lockingContract.mint(userAddress, tokenId, {
+        gasLimit: 300000,
+      });
       await mintTx.wait();
-
-      // Update local state.
       setTransactions((prev) => [
         ...prev,
         {
@@ -178,82 +207,77 @@ export default function CrossChainBridge() {
           sender: userAddress,
           receiver: userAddress,
           tokenId,
-          type: 'Create and Mint Token on Chain A',
-          status: 'Completed',
+          type: "Create and Mint Token on Chain A",
+          status: "Completed",
         },
       ]);
-
-      // Update the pending record to Completed.
       if (pendingRecord) {
         await updateTransactionRecord(pendingRecord.id, {
           mintHash: mintTx.hash,
-          status: 'Completed',
+          status: "Completed",
         });
       }
-      alert('Token minted successfully!');
+      alert("Token minted successfully!");
     } catch (error) {
-      console.error('Error:', error);
+      console.error("Error:", error);
       setErrorMessage(decodeError(error as ContractError));
-      // Update the pending record to Failed.
       if (pendingRecord) {
-        await updateTransactionRecord(pendingRecord.id, { status: 'Failed' });
+        await updateTransactionRecord(pendingRecord.id, { status: "Failed" });
       }
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [
+    tokenId,
+    provider,
+    userAddress,
+    insertTransactionRecord,
+    updateTransactionRecord,
+    switchToChain,
+  ]);
 
-  // Lock and Mint Functionality.
-  const lockAndMint = async () => {
-    setErrorMessage('');
+  // Lock token on Chain A then mint on Chain B.
+  const lockAndMint = useCallback(async () => {
+    setErrorMessage("");
     if (!tokenId || !provider) {
-      setErrorMessage('Please enter a valid token ID and connect your wallet');
+      setErrorMessage("Please enter a valid token ID and connect your wallet");
       return;
     }
     setIsLoading(true);
-
-    // Insert a pending record.
     const pendingRecord = await insertTransactionRecord({
-      type: 'Lock on Chain A and Mint Token on Chain B',
+      type: "Lock on Chain A and Mint Token on Chain B",
       tokenId,
-      status: 'Pending',
+      status: "Pending",
     });
-
     try {
       // Step 1: Lock on Chain A.
-      await switchToChain('AMOY');
+      await switchToChain("AMOY");
       const signerA = await provider.getSigner();
       const lockingContract = new Contract(
         CONSTANTS.LOCKING_CONTRACT,
         LOCKING_CONTRACT_ABI,
         signerA
       );
-
       const isOwner = await checkTokenOwnership(lockingContract, tokenId);
       if (!isOwner) throw new Error("You don't own this token");
-
       const isLocked = await lockingContract.lockedTokens(tokenId);
-      if (isLocked) throw new Error('Token is already locked');
-
+      if (isLocked) throw new Error("Token is already locked");
       const lockTx = await lockingContract.lockToken(tokenId, userAddress, {
         gasLimit: 500000,
       });
       await lockTx.wait();
-
       // Step 2: Mint on Chain B.
-      await switchToChain('CARDONA');
+      await switchToChain("CARDONA");
       const signerB = await provider.getSigner();
       const mintingContract = new Contract(
         CONSTANTS.MINTING_CONTRACT,
         MINTING_CONTRACT_ABI,
         signerB
       );
-
       const mintTx = await mintingContract.mintToken(tokenId, userAddress, {
         gasLimit: 500000,
       });
       await mintTx.wait();
-
       setTransactions((prev) => [
         ...prev,
         {
@@ -263,73 +287,75 @@ export default function CrossChainBridge() {
           sender: userAddress,
           receiver: userAddress,
           tokenId,
-          type: 'Lock on Chain A and Mint Token on Chain B',
-          status: 'Completed',
+          type: "Lock on Chain A and Mint Token on Chain B",
+          status: "Completed",
         },
       ]);
-
-      // Update the pending record to Completed.
       if (pendingRecord) {
         await updateTransactionRecord(pendingRecord.id, {
           lockHash: lockTx.hash,
           mintHash: mintTx.hash,
-          status: 'Completed',
+          status: "Completed",
         });
       }
-      alert('Token locked and minted successfully!');
+      alert("Token locked and minted successfully!");
     } catch (error) {
-      console.error('Error:', error);
+      console.error("Error:", error);
       setErrorMessage(decodeError(error as ContractError));
-      // Update pending record to Failed.
       if (pendingRecord) {
-        await updateTransactionRecord(pendingRecord.id, { status: 'Failed' });
+        await updateTransactionRecord(pendingRecord.id, { status: "Failed" });
       }
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [
+    tokenId,
+    provider,
+    userAddress,
+    insertTransactionRecord,
+    updateTransactionRecord,
+    switchToChain,
+    checkTokenOwnership,
+  ]);
 
-  // Unlock and Burn Functionality.
-  const unlockAndBurn = async () => {
-    setErrorMessage('');
+  // Burn token on Chain B then unlock on Chain A.
+  const unlockAndBurn = useCallback(async () => {
+    setErrorMessage("");
     if (!tokenId || !provider) {
-      setErrorMessage('Please enter a valid token ID and connect your wallet');
+      setErrorMessage("Please enter a valid token ID and connect your wallet");
       return;
     }
     setIsLoading(true);
-
-    // Insert a pending record.
     const pendingRecord = await insertTransactionRecord({
-      type: 'Unlock on Chain A and Burn on Chain B',
+      type: "Unlock on Chain A and Burn on Chain B",
       tokenId,
-      status: 'Pending',
+      status: "Pending",
     });
-
     try {
       // Step 1: Burn on Chain B.
-      await switchToChain('CARDONA');
+      await switchToChain("CARDONA");
       const signerB = await provider.getSigner();
       const mintingContract = new Contract(
         CONSTANTS.MINTING_CONTRACT,
         MINTING_CONTRACT_ABI,
         signerB
       );
-
-      const burnTx = await mintingContract.burnToken(tokenId);
+      const burnTx = await mintingContract.burnToken(tokenId, {
+        gasLimit: 300000,
+      });
       await burnTx.wait();
-
       // Step 2: Unlock on Chain A.
-      await switchToChain('AMOY');
+      await switchToChain("AMOY");
       const signerA = await provider.getSigner();
       const lockingContract = new Contract(
         CONSTANTS.LOCKING_CONTRACT,
         LOCKING_CONTRACT_ABI,
         signerA
       );
-
-      const unlockTx = await lockingContract.unlockToken(tokenId);
+      const unlockTx = await lockingContract.unlockToken(tokenId, {
+        gasLimit: 300000,
+      });
       await unlockTx.wait();
-
       setTransactions((prev) => [
         ...prev,
         {
@@ -339,31 +365,35 @@ export default function CrossChainBridge() {
           sender: userAddress,
           receiver: userAddress,
           tokenId,
-          type: 'Unlock on Chain A and Burn on Chain B',
-          status: 'Completed',
+          type: "Unlock on Chain A and Burn on Chain B",
+          status: "Completed",
         },
       ]);
-
-      // Update the pending record to Completed.
       if (pendingRecord) {
         await updateTransactionRecord(pendingRecord.id, {
           burnHash: burnTx.hash,
           unlockHash: unlockTx.hash,
-          status: 'Completed',
+          status: "Completed",
         });
       }
-      alert('Token burned and unlocked successfully!');
+      alert("Token burned and unlocked successfully!");
     } catch (error) {
-      console.error('Error:', error);
+      console.error("Error:", error);
       setErrorMessage(decodeError(error as ContractError));
-      // Update pending record to Failed.
       if (pendingRecord) {
-        await updateTransactionRecord(pendingRecord.id, { status: 'Failed' });
+        await updateTransactionRecord(pendingRecord.id, { status: "Failed" });
       }
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [
+    tokenId,
+    provider,
+    userAddress,
+    insertTransactionRecord,
+    updateTransactionRecord,
+    switchToChain,
+  ]);
 
   return (
     <div className="p-8">
@@ -434,7 +464,11 @@ export default function CrossChainBridge() {
                       )}
                     </Button>
 
-                    <Button onClick={lockAndMint} disabled={isLoading} className="h-20">
+                    <Button
+                      onClick={lockAndMint}
+                      disabled={isLoading}
+                      className="h-20"
+                    >
                       {isLoading ? (
                         <Skeleton className="h-4 w-32" />
                       ) : (
@@ -494,13 +528,17 @@ export default function CrossChainBridge() {
                     <CardHeader>
                       <CardTitle className="text-lg">{tx.type}</CardTitle>
                       <CardDescription>
-                        Token ID: {tx.tokenId} • {new Date(tx.timestamp).toLocaleString()}
+                        Token ID: {tx.tokenId} •{" "}
+                        {new Date(tx.timestamp).toLocaleString()}
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="grid gap-2 text-sm">
                       {tx.lockHash && (
                         <a
-                          href={getExplorerLink(tx.lockHash, CONSTANTS.AMOY_CHAIN_ID)}
+                          href={getExplorerLink(
+                            tx.lockHash,
+                            CONSTANTS.AMOY_CHAIN_ID
+                          )}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-500 hover:underline"
@@ -512,7 +550,7 @@ export default function CrossChainBridge() {
                         <a
                           href={getExplorerLink(
                             tx.mintHash,
-                            tx.type.includes('Chain B')
+                            tx.type.includes("Chain B")
                               ? CONSTANTS.CARDONA_CHAIN_ID
                               : CONSTANTS.AMOY_CHAIN_ID
                           )}
@@ -525,7 +563,10 @@ export default function CrossChainBridge() {
                       )}
                       {tx.burnHash && (
                         <a
-                          href={getExplorerLink(tx.burnHash, CONSTANTS.CARDONA_CHAIN_ID)}
+                          href={getExplorerLink(
+                            tx.burnHash,
+                            CONSTANTS.CARDONA_CHAIN_ID
+                          )}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-500 hover:underline"
@@ -535,7 +576,10 @@ export default function CrossChainBridge() {
                       )}
                       {tx.unlockHash && (
                         <a
-                          href={getExplorerLink(tx.unlockHash, CONSTANTS.AMOY_CHAIN_ID)}
+                          href={getExplorerLink(
+                            tx.unlockHash,
+                            CONSTANTS.AMOY_CHAIN_ID
+                          )}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-500 hover:underline"
@@ -547,11 +591,11 @@ export default function CrossChainBridge() {
                     <CardFooter>
                       <span
                         className={`px-2 py-1 rounded-full text-xs ${
-                          tx.status === 'Completed'
-                            ? 'bg-green-100 text-green-800'
-                            : tx.status === 'Failed'
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-yellow-100 text-yellow-800'
+                          tx.status === "Completed"
+                            ? "bg-green-100 text-green-800"
+                            : tx.status === "Failed"
+                            ? "bg-red-100 text-red-800"
+                            : "bg-yellow-100 text-yellow-800"
                         }`}
                       >
                         {tx.status}
