@@ -1,6 +1,6 @@
 export const CONSTANTS = {
-    LOCKING_CONTRACT: "0x1abe3f0da2d21cdc1746ae60a34df93587cd0b86",
-    MINTING_CONTRACT: "0x81347593e9e74e5b1aff9ccc31916e690d0c1d33",
+    LOCKING_CONTRACT: "0x9907ad9bf9b005ee4fadfd96662e35809ef4b6f5",
+    MINTING_CONTRACT: "0xb18ecaaa69000d47105d56bb00b834f4ea65af90",
     AMOY_CHAIN_ID: "0x13882",
     CARDONA_CHAIN_ID: "0x98a",
     AMOY_RPC_URL: "https://rpc-amoy.polygon.technology",

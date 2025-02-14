@@ -8,19 +8,9 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-model User {
-  id         String         @id @default(uuid())
-  email      String         @unique
-  password   String
-  name       String?
-  createdAt  DateTime       @default(now())
-  updatedAt  DateTime       @updatedAt
-  transactions Transaction[]
-}
-
 model Transaction {
   id         String   @id @default(uuid())
-  userId     String
+  userId     String   // This will reference auth.users.id
   type       String
   tokenId    String
   lockHash   String?
@@ -29,5 +19,13 @@ model Transaction {
   unlockHash String?
   timestamp  DateTime @default(now())
   status     String
-  user       User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model WhiteListedMerkle {
+  id        String   @id @default(uuid())
+  tokenId   String
+  userAddress  String
+  timestamp DateTime @default(now())
 }

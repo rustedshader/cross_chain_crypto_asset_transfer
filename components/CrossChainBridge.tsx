@@ -25,60 +25,8 @@ import { CONSTANTS } from "@/lib/constants";
 import { LOCKING_CONTRACT_ABI, MINTING_CONTRACT_ABI } from "@/lib/contracts";
 import { decodeError, truncateAddress, getExplorerLink } from "@/lib/utils";
 import { Transaction, ContractError } from "@/types";
-import { ethers } from "ethers";
 
-// -----------------------------------------------------------------------------
-// New: MerkleVerifier ABI & on-chain proof verification utility
-// -----------------------------------------------------------------------------
-const MERKLE_VERIFIER_ABI = [
-  "function verifyProof(bytes32[] calldata proof, bytes32 leaf) external view returns (bool)",
-];
-
-async function verifyOnChainMerkleProof(
-  proof: string[],
-  leaf: string,
-  verifierAddress: string,
-  provider: BrowserProvider
-): Promise<boolean> {
-  try {
-    const signer = await provider.getSigner();
-    const verifierContract = new Contract(
-      verifierAddress,
-      MERKLE_VERIFIER_ABI,
-      signer
-    );
-    const isValid = await verifierContract.verifyProof(proof, leaf);
-    return isValid;
-  } catch (err) {
-    console.error("Error verifying Merkle proof on-chain:", err);
-    return false;
-  }
-}
-
-// Example call from your frontend (e.g., in your mintToken function)
-async function fetchMerkleProof(
-  tokenId: string,
-  userAddress: string
-): Promise<{ proof: string[]; merkleRoot: string } | null> {
-  try {
-    const res = await fetch("/api/getMerkleProof", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tokenId, userAddress }),
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      console.error("Error fetching Merkle proof:", err.error);
-      return null;
-    }
-    return await res.json();
-  } catch (err) {
-    console.error("Error in fetchMerkleProof:", err);
-    return null;
-  }
-}
-
-export default function CrossChainBridge() {
+export default function CrossChainBridge({ userEmail }: { userEmail: string }) {
   const [userAddress, setUserAddress] = useState<string>("");
   const [provider, setProvider] = useState<BrowserProvider | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -195,6 +143,19 @@ export default function CrossChainBridge() {
     []
   );
 
+  const merkleCheck = async (email: string): Promise<boolean> => {
+    try {
+      const response = await fetch(`/api/merkle_check?email=${email}`, {
+        method: "GET",
+      });
+      const data = await response.json();
+      return data.isVerified; // Assuming the API returns { isValid: boolean }
+    } catch (error) {
+      console.error("Error during Merkle check:", error);
+      return false;
+    }
+  };
+
   // Update a transaction record via API.
   const updateTransactionRecord = useCallback(
     async (id: string, transactionData: Partial<Transaction>) => {
@@ -214,64 +175,44 @@ export default function CrossChainBridge() {
   // Create & Mint token on Chain A.
   const mintToken = useCallback(async () => {
     setErrorMessage("");
-    if (!tokenId || !provider) {
-      setErrorMessage("Please enter a valid token ID and connect your wallet");
-      return;
-    }
-    setIsLoading(true);
+  if (!tokenId || !provider) {
+    setErrorMessage("Please enter a valid token ID and connect your wallet");
+    return;
+  }
+  setIsLoading(true);
+  if (!userEmail) {
+    setErrorMessage("Please connect with your email first.");
+    setIsLoading(false);
+    return;
+  }
+  const isAllowed = await merkleCheck(userEmail);
+  if (!isAllowed) {
+    setErrorMessage("You are not authorized to mint tokens.");
+    setIsLoading(false);
+    return;
+  }
 
-    // Compute a leaf hash (e.g. keccak256 hash of tokenId + userAddress)
-    const leaf = ethers.keccak256(
-      ethers.toUtf8Bytes(`${tokenId}-${userAddress}`)
+  const pendingRecord = await insertTransactionRecord({
+    type: "Create and Mint Token on Chain A",
+    tokenId,
+    status: "Pending",
+  });
+
+  try {
+
+    // Proceed with minting
+    await switchToChain("AMOY");
+    const signer = await provider.getSigner();
+    const lockingContract = new Contract(
+      CONSTANTS.LOCKING_CONTRACT,
+      LOCKING_CONTRACT_ABI,
+      signer
     );
-    // NOTE: In a real scenario, obtain the proof array from your backend or off‑chain process.
-    const proof: any = await fetchMerkleProof(tokenId, userAddress);
-    if (!proof) {
-      setErrorMessage("Failed to fetch Merkle proof");
-      setIsLoading(false);
-      return;
-    }
-
-    // Replace with your deployed MerkleVerifier contract address.
-    const verifierAddress = "0xYourDeployedMerkleVerifierAddress";
-
-    const pendingRecord = await insertTransactionRecord({
-      type: "Create and Mint Token on Chain A",
-      tokenId,
-      status: "Pending",
+    
+    const mintTx = await lockingContract.mint(userAddress, tokenId, {
+      gasLimit: 300000,
     });
-    try {
-      // Verify the Merkle proof on-chain.
-      // We pass the current provider so the call happens on the connected chain.
-      const isValid = await verifyOnChainMerkleProof(
-        proof,
-        leaf,
-        verifierAddress,
-        provider
-      );
-      if (!isValid) {
-        //update transaction table
-        const cancelledRecord = await updateTransactionRecord(
-          pendingRecord.id,
-          {
-            status: "Failed",
-          }
-        );
-
-        throw new Error("Merkle proof verification failed");
-      }
-
-      await switchToChain("AMOY");
-      const signer = await provider.getSigner();
-      const lockingContract = new Contract(
-        CONSTANTS.LOCKING_CONTRACT,
-        LOCKING_CONTRACT_ABI,
-        signer
-      );
-      const mintTx = await lockingContract.mint(userAddress, tokenId, {
-        gasLimit: 300000,
-      });
-      await mintTx.wait();
+    await mintTx.wait();
       setTransactions((prev) => [
         ...prev,
         {
@@ -317,13 +258,16 @@ export default function CrossChainBridge() {
       return;
     }
     setIsLoading(true);
+    
     const pendingRecord = await insertTransactionRecord({
       type: "Lock on Chain A and Mint Token on Chain B",
       tokenId,
       status: "Pending",
     });
+  
     try {
-      // Step 1: Lock on Chain A.
+
+      // Proceed with locking and minting if validation passed
       await switchToChain("AMOY");
       const signerA = await provider.getSigner();
       const lockingContract = new Contract(
@@ -331,15 +275,23 @@ export default function CrossChainBridge() {
         LOCKING_CONTRACT_ABI,
         signerA
       );
+
+      
+  
+      // Existing ownership and lock checks
       const isOwner = await checkTokenOwnership(lockingContract, tokenId);
       if (!isOwner) throw new Error("You don't own this token");
       const isLocked = await lockingContract.lockedTokens(tokenId);
       if (isLocked) throw new Error("Token is already locked");
+
+  
+      // Lock transaction
       const lockTx = await lockingContract.lockToken(tokenId, userAddress, {
         gasLimit: 500000,
       });
       await lockTx.wait();
-      // Step 2: Mint on Chain B.
+  
+      // Mint transaction
       await switchToChain("CARDONA");
       const signerB = await provider.getSigner();
       const mintingContract = new Contract(
@@ -351,6 +303,8 @@ export default function CrossChainBridge() {
         gasLimit: 500000,
       });
       await mintTx.wait();
+  
+      // Update transaction records
       setTransactions((prev) => [
         ...prev,
         {
@@ -364,6 +318,7 @@ export default function CrossChainBridge() {
           status: "Completed",
         },
       ]);
+  
       if (pendingRecord) {
         await updateTransactionRecord(pendingRecord.id, {
           lockHash: lockTx.hash,
@@ -372,6 +327,7 @@ export default function CrossChainBridge() {
         });
       }
       alert("Token locked and minted successfully!");
+  
     } catch (error) {
       console.error("Error:", error);
       setErrorMessage(decodeError(error as ContractError));
@@ -399,13 +355,16 @@ export default function CrossChainBridge() {
       return;
     }
     setIsLoading(true);
+    
     const pendingRecord = await insertTransactionRecord({
       type: "Unlock on Chain A and Burn on Chain B",
       tokenId,
       status: "Pending",
     });
-    try {
-      // Step 1: Burn on Chain B.
+  
+    try { 
+      // Proceed with burning and unlocking if validation passed
+      // Step 1: Burn on Chain B
       await switchToChain("CARDONA");
       const signerB = await provider.getSigner();
       const mintingContract = new Contract(
@@ -413,11 +372,13 @@ export default function CrossChainBridge() {
         MINTING_CONTRACT_ABI,
         signerB
       );
+
       const burnTx = await mintingContract.burnToken(tokenId, {
         gasLimit: 300000,
       });
       await burnTx.wait();
-      // Step 2: Unlock on Chain A.
+  
+      // Step 2: Unlock on Chain A
       await switchToChain("AMOY");
       const signerA = await provider.getSigner();
       const lockingContract = new Contract(
@@ -425,10 +386,17 @@ export default function CrossChainBridge() {
         LOCKING_CONTRACT_ABI,
         signerA
       );
+  
+      // Additional lock status check
+      const isLocked = await lockingContract.lockedTokens(tokenId);
+      if (!isLocked) throw new Error("Token is not locked");
+  
       const unlockTx = await lockingContract.unlockToken(tokenId, {
         gasLimit: 300000,
       });
       await unlockTx.wait();
+  
+      // Update transaction records
       setTransactions((prev) => [
         ...prev,
         {
@@ -442,6 +410,7 @@ export default function CrossChainBridge() {
           status: "Completed",
         },
       ]);
+  
       if (pendingRecord) {
         await updateTransactionRecord(pendingRecord.id, {
           burnHash: burnTx.hash,
@@ -450,6 +419,7 @@ export default function CrossChainBridge() {
         });
       }
       alert("Token burned and unlocked successfully!");
+  
     } catch (error) {
       console.error("Error:", error);
       setErrorMessage(decodeError(error as ContractError));
@@ -476,6 +446,11 @@ export default function CrossChainBridge() {
             <CardTitle className="text-3xl flex items-center gap-2">
               <ArrowRightLeft className="h-8 w-8" />
               Cross-Chain Bridge
+              {userEmail && (
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  {userEmail}
+                </span>
+              )}
             </CardTitle>
             <CardDescription>
               Transfer tokens between Polygon Amoy and zkEVM Cardona

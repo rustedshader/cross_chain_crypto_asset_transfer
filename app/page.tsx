@@ -1,4 +1,3 @@
-// File: app/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -10,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 export default function HomePage() {
   const [session, setSession] = useState<any | undefined>(undefined);
   const supabase = createClientComponentClient();
+  const [userEmail, setUserEmail] = useState('');
   const router = useRouter();
 
   useEffect(() => {
@@ -18,6 +18,9 @@ export default function HomePage() {
         data: { session },
       } = await supabase.auth.getSession();
       setSession(session);
+      if (session && session.user?.email) {
+        setUserEmail(session.user.email);
+      }
     };
     getSession();
   }, [supabase]);
@@ -47,6 +50,6 @@ export default function HomePage() {
     );
   }
 
-  // If authenticated, render the CrossChainBridge.
-  return <CrossChainBridge />;
+  // If authenticated, render the CrossChainBridge with userEmail.
+  return <CrossChainBridge userEmail={userEmail} />;
 }
