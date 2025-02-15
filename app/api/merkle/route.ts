@@ -16,7 +16,6 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
     }
 
-    // Extract email addresses from users
     const emails = users.map(user => user.email).filter(Boolean) as string[];
 
     if (emails.length === 0) {
@@ -25,12 +24,18 @@ export async function PUT(request: Request) {
 
     // Hash emails using keccak256
     const leaves = emails.map(email => keccak256(Buffer.from(email)));
-
-    // Create Merkle Tree
     const merkleTree = new MerkleTree(leaves, keccak256, { sort: true });
-
-    // Get Merkle root
     const merkleRoot = merkleTree.getHexRoot();
+
+    // Generate and store proofs for all emails
+    const emailProofs = emails.map(email => {
+      const hashedEmail = keccak256(Buffer.from(email));
+      const proof = merkleTree.getProof(hashedEmail);
+      return {
+        email,
+        proof: proof.map(x => x.data.toString('hex'))
+      };
+    });
 
     // Set all existing roots to inactive
     await prisma.merkleRoot.updateMany({
@@ -38,11 +43,12 @@ export async function PUT(request: Request) {
       data: { active: false }
     });
 
-    // Store new Merkle root in database
+    // Store new Merkle root and proofs in database
     const storedRoot = await prisma.merkleRoot.create({
       data: {
         root: merkleRoot,
         emails: emails,
+        emailProofs: emailProofs, // Add this field to your Prisma schema
         active: true,
         description: `Merkle root generated from ${emails.length} emails`
       }

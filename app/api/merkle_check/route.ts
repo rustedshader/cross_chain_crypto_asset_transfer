@@ -1,47 +1,49 @@
 import { NextResponse } from 'next/server';
-import { keccak256 } from 'ethers'; // For hashing
-import { MerkleTree } from 'merkletreejs'; // For Merkle Tree
-import { createUserClient } from '@/utils/supabase/server';
+import { keccak256 } from 'ethers';
+import { MerkleTree } from 'merkletreejs';
+import { prisma } from '@/lib/prisma';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const email = searchParams.get('email'); // Get the email from query parameters
+  const email = searchParams.get('email');
 
   if (!email) {
     return NextResponse.json({ error: 'Email is required' }, { status: 400 });
   }
 
   try {
-    const supabase = await createUserClient();
-    // Fetch all users using the admin API
-    const { data: { users }, error: usersError } = await supabase.auth.admin.listUsers();
+    // Get active root and proofs from database
+    const activeRoot = await prisma.merkleRoot.findFirst({
+      where: { active: true },
+      orderBy: { timestamp: 'desc' }
+    });
 
-    if (usersError) {
-      console.error('Error fetching users:', usersError);
-      return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
+    if (!activeRoot) {
+      return NextResponse.json({ error: 'No active Merkle root found' }, { status: 404 });
     }
 
-    // Extract email addresses from users
-    const emails = users.map(user => user.email).filter(Boolean) as string[]; // Filter out null/undefined emails
-
-    if (emails.length === 0) {
-      return NextResponse.json({ error: 'No emails found' }, { status: 404 });
+    // Find proof for the given email
+    const emailProof = activeRoot.emailProofs.find(p => p.email === email);
+    
+    if (!emailProof) {
+      return NextResponse.json({ isVerified: false });
     }
-
-    // Hash emails using keccak256
-    const leaves = emails.map(email => keccak256(Buffer.from(email)));
-
-    // Create Merkle Tree
-    const merkleTree = new MerkleTree(leaves, keccak256, { sort: true });
 
     // Hash the provided email
     const hashedEmail = keccak256(Buffer.from(email));
+    
+    // Convert stored proof back to Buffer format
+    const proof = emailProof.proof.map(p => Buffer.from(p, 'hex'));
 
-    // Check if the hashed email is part of the Merkle tree
-    const proof = merkleTree.getProof(hashedEmail);
-    const isVerified = merkleTree.verify(proof, hashedEmail, merkleTree.getHexRoot());
+    // Verify using just the root and stored proof
+    const isVerified = MerkleTree.verify(
+      proof,
+      hashedEmail,
+      activeRoot.root,
+      keccak256,
+      { sort: true }
+    );
 
-    // Return the verification result
     return NextResponse.json({ isVerified });
   } catch (error) {
     console.error('Internal Server Error:', error);

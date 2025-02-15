@@ -34,12 +34,13 @@ model WhiteListedMerkle {
 
 // Add this to your existing schema.prisma
 model MerkleRoot {
-  id          String   @id @default(uuid())
-  root        String   // To store the Merkle root hash
-  timestamp   DateTime @default(now())
-  active      Boolean  @default(true)  // To track which root is currently active
-  emails      String[] // To store the list of emails used to generate this root
-  description String?  // Optional field to add context about this root
-
-  @@index([active])
+  id          String   @id @default(uuid())  // Good choice using UUID instead of auto-increment
+  root        String   // Correct for storing hex string of merkle root
+  emailProofs Json     // Correct for storing array of proof objects
+  timestamp   DateTime @default(now())  // Good for tracking when roots were created
+  active      Boolean  @default(true)   // Useful for managing current active root
+  emails      String[] // Correct for storing array of email strings
+  description String?  // Optional description is a good addition
+  
+  @@index([active])    // Good optimization for queries filtering by active status
 }
