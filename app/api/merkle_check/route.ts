@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { keccak256 } from 'ethers'; // For hashing
 import { MerkleTree } from 'merkletreejs'; // For Merkle Tree
-import { createUserClient } from '@/utils/supabase';
+import { createUserClient } from '@/utils/supabase/server';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);

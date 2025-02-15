@@ -1,31 +1,39 @@
-// File: components/NavBar.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@/utils/supabase/client';
 import { useRouter } from 'next/navigation';
+import { Session } from '@supabase/supabase-js';
 
 export default function NavBar() {
-  const [session, setSession] = useState<any>(null);
-  const supabase = createClientComponentClient();
+  const [session, setSession] = useState<Session | null>(null);
+  const supabase = createClient();
   const router = useRouter();
 
   useEffect(() => {
-    const getSession = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-    };
-    getSession();
-  }, [supabase]);
+    });
+
+    // Listen for auth state changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (!session) {
+        router.push('/auth/login');
+      }
+    });
+
+    // Cleanup subscription on unmount
+    return () => subscription.unsubscribe();
+  }, [supabase, router]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    setSession(null);
-    router.push('/auth/login');
   };
 
   return (
@@ -34,7 +42,7 @@ export default function NavBar() {
         {session && (
           <>
             <Link href="/" className="mr-4 font-bold">
-            Home
+              Home
             </Link>
             <Link href="/profile" className="mr-4">
               Profile
@@ -62,4 +70,3 @@ export default function NavBar() {
     </nav>
   );
 }
-    

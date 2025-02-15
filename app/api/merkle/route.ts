@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { keccak256 } from 'ethers';
 import { MerkleTree } from 'merkletreejs';
-import { createAdminClient } from '@/utils/supabase';
+import { createAdminClient } from '@/utils/supabase/server';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();

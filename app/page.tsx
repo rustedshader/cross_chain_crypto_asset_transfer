@@ -1,14 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@/utils/supabase/client';
+
 import { useRouter } from 'next/navigation';
 import CrossChainBridge from '@/components/CrossChainBridge';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function HomePage() {
   const [session, setSession] = useState<any | undefined>(undefined);
-  const supabase = createClientComponentClient();
+  const supabase = createClient();
   const [userEmail, setUserEmail] = useState('');
   const router = useRouter();
 

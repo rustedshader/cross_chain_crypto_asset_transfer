@@ -1,7 +1,7 @@
 // File: app/api/profile/update/route.ts
 import { NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth";
-import { createAdminClient } from "@/utils/supabase";
+import { createAdminClient } from "@/utils/supabase/server";
 
 export async function PUT(request: Request) {
   const user = await getUserFromRequest(request);

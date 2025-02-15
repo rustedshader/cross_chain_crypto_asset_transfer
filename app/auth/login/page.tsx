@@ -6,14 +6,14 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@/utils/supabase/client';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const router = useRouter();
-  const supabase = createClientComponentClient();
+  const supabase = createClient();
 
   const handleLogin = async () => {
     setError('');
@@ -21,8 +21,8 @@ export default function LoginPage() {
     if (error) {
       setError(error.message);
     } else {
-      // Redirect after login (e.g. to profile)
       router.push('/');
+      
     }
   };
 
