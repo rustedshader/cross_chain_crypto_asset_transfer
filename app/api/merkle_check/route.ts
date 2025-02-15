@@ -23,7 +23,7 @@ export async function GET(request: Request) {
     }
 
     // Find proof for the given email
-    const emailProof = activeRoot.emailProofs.find(p => p.email === email);
+    const emailProof = (activeRoot.emailProofs as any[])?.find(p => p.email === email);
     
     if (!emailProof) {
       return NextResponse.json({ isVerified: false });
