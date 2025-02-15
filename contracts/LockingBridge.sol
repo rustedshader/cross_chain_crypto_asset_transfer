@@ -1,62 +1,53 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.26;
 
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import '@openzeppelin/contracts/token/ERC721/ERC721.sol';
+import '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
+import '@openzeppelin/contracts/access/Ownable.sol';
 
-contract LockingBridge is ReentrancyGuard, Ownable {
-    // Tracks whether a token is locked.
+contract LockingContractA is ERC721, ReentrancyGuard, Ownable {
+    event TokenLocked(
+        uint256 indexed tokenId,
+        address indexed sender,
+        address indexed receiver,
+        uint256 timestamp
+    );
+
+    event TokenMinted(
+        uint256 indexed tokenId,
+        address indexed receiver,
+        uint256 timestamp
+    );
+
+    event TokenUnlocked(
+        uint256 indexed tokenId,
+        address indexed sender,
+        uint256 timestamp
+    );
+
     mapping(uint256 => bool) public lockedTokens;
-    // Stores the original owner of a locked token.
-    mapping(uint256 => address) public originalOwner;
+    mapping(uint256 => bool) private mintedTokens;
 
-    // Immutable NFT contract for gas optimization.
-    IERC721 public immutable nftContract;
+    constructor() ERC721("LockedTokenA", "LTA") Ownable(msg.sender) {}
 
-    event TokenMinted(address indexed to, uint256 indexed tokenId);
-    event TokenLocked(address indexed owner, uint256 indexed tokenId);
-    event TokenUnlocked(address indexed owner, uint256 indexed tokenId);
-
-    constructor(address _nftContract) {
-        require(_nftContract != address(0), "Invalid NFT contract address");
-        nftContract = IERC721(_nftContract);
+    function mint(address to, uint256 tokenId) external {
+        require(!mintedTokens[tokenId], "Token is already minted");
+        require(tokenId > 0, "Invalid token ID");
+        _mint(to, tokenId);
+        mintedTokens[tokenId] = true;
+        emit TokenMinted(tokenId, to, block.timestamp);
     }
 
-    // Mint a token on Chain A.
-    // In production, proper access control and mint logic should be applied.
-    function mint(address to, uint256 tokenId) external nonReentrant {
-        // The actual minting logic would depend on your NFT implementation.
-        // Here we simply emit an event for off-chain relayers to verify.
-        emit TokenMinted(to, tokenId);
-    }
-
-    // Lock a token before bridging to Chain B.
-    function lockToken(uint256 tokenId, address user) external nonReentrant {
-        require(!lockedTokens[tokenId], "Token already locked");
-        require(nftContract.ownerOf(tokenId) == user, "You don't own this token");
-
+    function lockToken(uint256 tokenId, address receiver) external nonReentrant {
+        require(ownerOf(tokenId) == msg.sender, "You do not own this token");
+        require(!lockedTokens[tokenId], "Token is already locked");
         lockedTokens[tokenId] = true;
-        originalOwner[tokenId] = user;
-
-        // Optionally: Transfer the token to this contract for custody.
-        // nftContract.transferFrom(user, address(this), tokenId);
-
-        emit TokenLocked(user, tokenId);
+        emit TokenLocked(tokenId, msg.sender, receiver, block.timestamp);
     }
 
-    // Unlock a token after it has been bridged back.
-    function unlockToken(uint256 tokenId) external nonReentrant {
-        require(lockedTokens[tokenId], "Token not locked");
-        address owner = originalOwner[tokenId];
-        require(msg.sender == owner, "Caller is not token owner");
-
+    function unlockToken(uint256 tokenId) external onlyOwner {
+        require(lockedTokens[tokenId], "Token is not locked");
         lockedTokens[tokenId] = false;
-        originalOwner[tokenId] = address(0);
-
-        // Optionally: Transfer the token back to the owner if it was held by the contract.
-        // nftContract.transferFrom(address(this), owner, tokenId);
-
-        emit TokenUnlocked(owner, tokenId);
+        emit TokenUnlocked(tokenId, msg.sender, block.timestamp);
     }
 }

@@ -2,22 +2,18 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  CardDescription,
+  CardFooter,
+} from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-
-interface Transaction {
-  id: string;
-  type: string;
-  tokenId: string;
-  lockHash?: string;
-  mintHash?: string;
-  burnHash?: string;
-  unlockHash?: string;
-  timestamp: string;
-  status: string;
-}
+import { Transaction } from '@/types';
 
 export default function TransactionHistoryPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -55,7 +51,7 @@ export default function TransactionHistoryPage() {
         <Skeleton className="h-12 w-full" />
       ) : (
         transactions.map((tx) => (
-          <Card key={tx.id} className="mb-4">
+          <Card key={tx.tokenId + tx.timestamp} className="mb-4">
             <CardHeader>
               <CardTitle>{tx.type}</CardTitle>
               <CardDescription>
