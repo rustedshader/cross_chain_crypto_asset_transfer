@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { keccak256 } from 'ethers'; // For hashing
 import { MerkleTree } from 'merkletreejs'; // For Merkle Tree
-import { createClient } from '@/utils/supabase';
+import { createUserClient } from '@/utils/supabase';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const supabase = await createClient();
+    const supabase = await createUserClient();
     // Fetch all users using the admin API
     const { data: { users }, error: usersError } = await supabase.auth.admin.listUsers();
 

@@ -29,3 +29,17 @@ model WhiteListedMerkle {
   userAddress  String
   timestamp DateTime @default(now())
 }
+
+
+
+// Add this to your existing schema.prisma
+model MerkleRoot {
+  id          String   @id @default(uuid())
+  root        String   // To store the Merkle root hash
+  timestamp   DateTime @default(now())
+  active      Boolean  @default(true)  // To track which root is currently active
+  emails      String[] // To store the list of emails used to generate this root
+  description String?  // Optional field to add context about this root
+
+  @@index([active])
+}
