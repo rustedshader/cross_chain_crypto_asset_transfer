@@ -247,6 +247,7 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({
         
         if (pendingRecord?.id) {
           await updateTransactionRecord(pendingRecord.id, {
+            transferId: transferId,
             lockHash: lockTx.hash,
             mintHash: mintTx.hash,
             status: "Completed",
