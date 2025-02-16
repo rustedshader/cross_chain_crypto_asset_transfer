@@ -39,7 +39,7 @@ export default function NFTGallery() {
           "x-api-key": "3c425fb533ed4602be376f8b83949233",
         },
       };
-      const apiUrl = `https://testnets-api.opensea.io/api/v2/chain/${chain}/account/${address}/nfts`;
+      const apiUrl = `https://testnets-api.opensea.io/api/v2/chain/${chain.toLowerCase()}/account/${address}/nfts`;
       const res = await fetch(apiUrl, options);
       const data = await res.json();
       if (data.nfts) {
