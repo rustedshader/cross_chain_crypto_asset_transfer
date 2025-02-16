@@ -1,6 +1,4 @@
-// lib/nftUtils.ts
 import { NFT } from "@/types";
-import { prisma } from "@/lib/prisma";
 
 export interface WrappedNFTInfo {
   isWrapped: boolean;
@@ -15,30 +13,16 @@ export async function getWrappedNFTInfo(
   currentChain: string
 ): Promise<WrappedNFTInfo> {
   try {
-    // Find the active transaction for this NFT
-    const transaction = await prisma.transaction.findFirst({
-      where: {
-        tokenId: nft.identifier,
-        isActive: true,
-        targetChain: currentChain,
-        type: "LOCK_AND_MINT",
-      },
-      orderBy: {
-        timestamp: 'desc',
-      },
-    });
-
-    if (!transaction) {
-      return { isWrapped: false };
+    const response = await fetch(
+      `/api/nft/wrapped?tokenId=${nft.identifier}&chain=${currentChain}`
+    );
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
-
-    return {
-      isWrapped: true,
-      originalChain: transaction.sourceChain,
-      originalContract: transaction.sourceContract,
-      transferId: transaction.transferId,
-      transaction: transaction
-    };
+    
+    const data = await response.json();
+    return data;
   } catch (error) {
     console.error("Error checking wrapped NFT status:", error);
     return { isWrapped: false };

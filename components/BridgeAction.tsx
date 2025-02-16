@@ -255,6 +255,7 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({
 
         toast.success("NFT successfully bridged!");
       } catch (mintError) {
+        console.error("Minting error:", mintError);
         // If minting fails, unlock the NFT
         toast.error("Minting failed, unlocking NFT...");
         await switchToChain(sourceChain);
@@ -262,7 +263,7 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({
           gasLimit: 500000
         });
         await unlockTx.wait();
-        throw new Error("Minting failed, NFT has been unlocked");
+        // throw new Error("Minting failed, NFT has been unlocked");
       }
 
     } catch (error) {
