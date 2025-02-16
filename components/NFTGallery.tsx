@@ -15,11 +15,12 @@ import { RefreshCw, Wallet } from "lucide-react";
 import { getBatchWrappedNFTInfo } from "@/utils/nftUtils";
 import { BrowserProvider, formatUnits } from "ethers";
 import { Badge } from "@/components/ui/badge";
+import WalletSelector from "./WalletSelector";
 
 const WalletNotConnected = ({
-  onConnect,
+  handleConnectWalletClick,
 }: {
-  onConnect: () => Promise<void>;
+  handleConnectWalletClick: () => void;
 }) => (
   <div className="flex flex-col items-center justify-center min-h-[400px] p-8 bg-gray-800/50 rounded-lg">
     <div className="bg-gray-700 p-6 rounded-full mb-6">
@@ -35,13 +36,19 @@ const WalletNotConnected = ({
     <Button
       variant="secondary"
       className="px-6 flex items-center gap-2"
-      onClick={onConnect}
+      onClick={handleConnectWalletClick}
     >
       <Wallet className="w-4 h-4" />
       Connect Wallet
     </Button>
   </div>
 );
+
+interface WalletOption {
+  name: string;
+  id: string;
+  // You can add an icon or other metadata here if needed.
+}
 
 export default function NFTGallery() {
   const dispatch = useAppDispatch();
@@ -54,10 +61,12 @@ export default function NFTGallery() {
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [selectedNFT, setSelectedNFT] = useState<NFT | null>(null);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [showWalletOptions, setShowWalletOptions] = useState(false);
 
-  const connectWallet = async () => {
+  // Function to handle connection via MetaMask
+  const connectMetaMask = async () => {
     if (!window.ethereum) {
-      setErrorMessage("Please install MetaMask!");
+      alert("Please install MetaMask!");
       return;
     }
     try {
@@ -66,13 +75,35 @@ export default function NFTGallery() {
       const signer = await provider.getSigner();
       const walletAddress = await signer.getAddress();
       dispatch(setWalletAddress(walletAddress));
-
-      const balanceBN = await provider.getBalance(walletAddress);
-      const formattedBalance = parseFloat(formatUnits(balanceBN, 18));
-      dispatch(setBalance(Number(formattedBalance.toFixed(4))));
+      // Wallet options modal can be closed after connection
+      setShowWalletOptions(false);
     } catch (error) {
-      console.error("Error connecting wallet:", error);
-      setErrorMessage("Failed to connect wallet. Please try again.");
+      console.error("Error connecting MetaMask:", error);
+    }
+  };
+
+  // When the "Connect Wallet" button is clicked, show the wallet options modal
+  const handleConnectWalletClick = () => {
+    setShowWalletOptions(true);
+  };
+
+  const handleWalletOptionSelect = async (option: WalletOption) => {
+    try {
+      switch (option.id) {
+        case "metamask":
+          if (!window.ethereum?.isMetaMask) {
+            window.open("https://metamask.io/download/", "_blank");
+            return;
+          }
+          await connectMetaMask();
+          break;
+
+        default:
+          alert(`${option.name} integration coming soon!`);
+      }
+      setShowWalletOptions(false);
+    } catch (error) {
+      console.error(`Error connecting ${option.name}:`, error);
     }
   };
 
@@ -187,7 +218,9 @@ export default function NFTGallery() {
       )}
 
       {!isConnected ? (
-        <WalletNotConnected onConnect={connectWallet} />
+        <WalletNotConnected
+        handleConnectWalletClick={handleConnectWalletClick}
+        />
       ) : (
         <>
           {isLoading ? (
@@ -275,6 +308,15 @@ export default function NFTGallery() {
           sourceChain={chain}
           onClose={() => setSelectedNFT(null)}
           onTransferSuccess={handleRefresh}
+        />
+      )}
+
+      {/* Wallet Options Modal */}
+      {showWalletOptions && (
+        <WalletSelector
+          isOpen={showWalletOptions}
+          onClose={() => setShowWalletOptions(false)}
+          onSelect={handleWalletOptionSelect}
         />
       )}
     </div>
