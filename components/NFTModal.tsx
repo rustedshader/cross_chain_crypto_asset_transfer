@@ -72,9 +72,10 @@ interface RootState {
 
 interface NFTDetailsProps {
   nft: NFT;
+  sourceChain: string;
 }
 
-const NFTDetails: React.FC<NFTDetailsProps> = ({ nft }) => {
+const NFTDetails: React.FC<NFTDetailsProps> = ({ nft , sourceChain }) => {
   return (
     <Card className="bg-gray-800 text-white">
       <CardHeader>
@@ -157,9 +158,10 @@ const NFTDetails: React.FC<NFTDetailsProps> = ({ nft }) => {
 interface BridgeActionsProps {
   nft: NFT;
   addTransaction: (tx: Transaction) => void;
+  sourceChain: string;
 }
 
-const BridgeActions: React.FC<BridgeActionsProps> = ({ nft, addTransaction }) => {
+const BridgeActions: React.FC<BridgeActionsProps> = ({ nft, addTransaction , sourceChain}) => {
   // Get wallet info from Redux store
   const { address: userAddress } = useSelector(
     (state: RootState) => state.wallet
@@ -184,8 +186,8 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({ nft, addTransaction }) =>
         setCurrentChain(
           chainId === CONSTANTS.AMOY_CHAIN_ID
             ? "Polygon Amoy"
-            : chainId === CONSTANTS.CARDONA_CHAIN_ID
-            ? "Polygon zkEVM Cardona Testnet"
+            : chainId === CONSTANTS.OP_SEPOLIA_CHAIN_ID
+            ? "OP Sepolia Testnet"
             : "Unknown Chain"
         );
       })();
@@ -196,8 +198,8 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({ nft, addTransaction }) =>
         setCurrentChain(
           chainId === CONSTANTS.AMOY_CHAIN_ID
             ? "Polygon Amoy"
-            : chainId === CONSTANTS.CARDONA_CHAIN_ID
-            ? "Polygon zkEVM Cardona Testnet"
+            : chainId === CONSTANTS.OP_SEPOLIA_CHAIN_ID
+            ? "OP Sepolia Testnet"
             : "Unknown Chain"
         );
       });
@@ -206,8 +208,8 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({ nft, addTransaction }) =>
 
   // Helper: Switch chain using wallet_switchEthereumChain (and add if needed)
   const switchToChain = useCallback(
-    async (chainType: "AMOY" | "CARDONA") => {
-      const config = CONSTANTS.CHAIN_CONFIG[chainType];
+    async (chainType: string) => {
+      const config = CONSTANTS.CHAIN_CONFIG[chainType.toUpperCase()];
       try {
         await window.ethereum.request({
           method: "wallet_switchEthereumChain",
@@ -321,7 +323,7 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({ nft, addTransaction }) =>
       // --- PART 1: Lock NFT on Chain A (AMOY) ---
       
       // Switch to the chain where the SourceChainGateway is deployed.
-      await switchToChain("AMOY");
+      await switchToChain(sourceChain);
       const signer = await provider.getSigner();
       
       // Create an instance of the NFT contract with signer (for approval & ownership check)
@@ -456,12 +458,17 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({ nft, addTransaction }) =>
           <select
             value={selectedChain}
             onChange={(e) =>
-              setSelectedChain(e.target.value as "AMOY" | "CARDONA")
+              setSelectedChain(e.target.value as any)
             }
             className="p-2 rounded-md bg-gray-700 text-white border border-gray-600"
           >
-            <option value="AMOY">Polygon Amoy</option>
-            <option value="CARDONA">Polygon zkEVM Cardona Testnet</option>
+            {CONSTANTS.AVAILABLE_CHAINS.map((chain) => 
+              chain.chainId !== sourceChain && (
+                <option key={chain.chainId} value={chain.chainId}>
+                  {chain.name}
+                </option>
+              )
+            )}
           </select>
           <Button onClick={handleBridge} disabled={isLoading} className="h-12">
             {isLoading ? (
@@ -594,9 +601,10 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({
 interface NFTModalProps {
   nft: NFT;
   onClose: () => void;
+  sourceChain: string;
 }
 
-const NFTModal: React.FC<NFTModalProps> = ({ nft, onClose }) => {
+const NFTModal: React.FC<NFTModalProps> = ({ nft, onClose, sourceChain }) => {
   // Keep transaction records in the parent so they can be passed to TransactionHistory
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const addTransaction = (tx: Transaction) => {
@@ -615,10 +623,10 @@ const NFTModal: React.FC<NFTModalProps> = ({ nft, onClose }) => {
         </button>
 
         {/* NFT Details */}
-        <NFTDetails nft={nft} />
+        <NFTDetails sourceChain={sourceChain} nft={nft} />
 
         {/* Cross-Chain Bridge Actions */}
-        <BridgeActions nft={nft} addTransaction={addTransaction} />
+        <BridgeActions  sourceChain={sourceChain} nft={nft} addTransaction={addTransaction} />
 
         {/* Transaction History */}
         {transactions.length > 0 && (

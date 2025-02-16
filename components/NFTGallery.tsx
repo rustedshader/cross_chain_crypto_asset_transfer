@@ -9,6 +9,7 @@ import { useAppSelector, useAppDispatch } from "@/redux/hooks";
 import { RootState } from "@/redux/store";
 import { setChain } from "@/redux/walletSlice";
 import NFTModal, { NFT } from "./NFTModal";
+import { CONSTANTS } from "@/lib/constants";
 
 export default function NFTGallery() {
   const dispatch = useAppDispatch();
@@ -83,9 +84,11 @@ export default function NFTGallery() {
                 onChange={(e) => dispatch(setChain(e.target.value))}
                 className="border border-gray-300 rounded-md p-2 text-sm bg-gray-700 text-white"
               >
-                <option value="amoy">Amoy</option>
-                <option value="ethereum">Ethereum</option>
-                <option value="polygon">Polygon</option>
+              {CONSTANTS.AVAILABLE_CHAINS.map((chain) => (
+              <option key={chain.chainId} value={chain.chainId}>
+                {chain.name}
+              </option>
+            ))}
               </select>
             </div>
             <Button variant="secondary" onClick={fetchNFTs}>
@@ -148,7 +151,7 @@ export default function NFTGallery() {
 
       {/* Modal for NFT Details */}
       {selectedNFT && (
-        <NFTModal nft={selectedNFT} onClose={() => setSelectedNFT(null)} />
+        <NFTModal nft={selectedNFT} sourceChain={chain} onClose={() => setSelectedNFT(null)} />
       )}
     </div>
   );
