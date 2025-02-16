@@ -14,6 +14,7 @@ import { motion } from "framer-motion";
 import { RefreshCw, Wallet } from "lucide-react";
 import { getBatchWrappedNFTInfo } from "@/utils/nftUtils";
 import { BrowserProvider, formatUnits } from "ethers";
+import { Badge } from "@/components/ui/badge";
 
 const WalletNotConnected = ({ onConnect }: { onConnect: () => Promise<void> }) => (
   <div className="flex flex-col items-center justify-center min-h-[400px] p-8 bg-gray-800/50 rounded-lg">
@@ -95,7 +96,7 @@ export default function NFTGallery() {
       const data = await res.json();
       if (data.nfts && data.nfts.length > 0) {
         const wrappedInfoMap = await getBatchWrappedNFTInfo(data.nfts, chain);
-        const nftsWithInfo = data.nfts.map((nft: { identifier: string; collection: string; name?: string; display_image_url?: string }) => ({
+        const nftsWithInfo = data.nfts.map((nft: { identifier: string; collection: string; name?: string; display_image_url?: string ;wrappedInfo? : any}) => ({
           ...nft,
           wrappedInfo: wrappedInfoMap[nft.identifier]
         }));
@@ -194,6 +195,11 @@ export default function NFTGallery() {
                       <CardTitle className="text-sm truncate">
                         {nft.name || `NFT #${nft.identifier}`}
                       </CardTitle>
+                      {nft?.wrappedInfo.isWrapped && (
+                      <Badge variant="secondary" className="bg-purple-500/20 text-purple-300 border-purple-500/50">
+                        Wrapped NFT
+                      </Badge>
+                    )}
                     </CardHeader>
                     <CardContent>
                       {nft.display_image_url ? (

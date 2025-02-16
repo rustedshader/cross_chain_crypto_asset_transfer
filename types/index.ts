@@ -34,6 +34,7 @@ export interface NFT {
   updated_at: string;
   is_disabled: boolean;
   is_nsfw: boolean;
+  wrappedInfo?: any;
 }
 
 // Assume your Redux store has a wallet slice at state.wallet.
