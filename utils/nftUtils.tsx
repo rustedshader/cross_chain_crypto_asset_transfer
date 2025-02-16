@@ -28,3 +28,29 @@ export async function getWrappedNFTInfo(
     return { isWrapped: false };
   }
 }
+
+
+export async function getBatchWrappedNFTInfo(
+    nfts: NFT[],
+    currentChain: string
+  ): Promise<Record<string, WrappedNFTInfo>> {
+    try {
+      const tokenIds = nfts.map(nft => nft.identifier).join(',');
+      const response = await fetch(
+        `/api/nft/batch-wrapped?tokenIds=${tokenIds}&chain=${currentChain}`
+      );
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Error checking wrapped NFT status:", error);
+      return nfts.reduce((acc, nft) => {
+        acc[nft.identifier] = { isWrapped: false };
+        return acc;
+      }, {} as Record<string, WrappedNFTInfo>);
+    }
+  }

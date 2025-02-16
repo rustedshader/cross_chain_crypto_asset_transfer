@@ -5,17 +5,39 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { useAppSelector, useAppDispatch } from "@/redux/hooks";
 import { RootState } from "@/redux/store";
-import { setChain } from "@/redux/walletSlice";
+import { setChain, setWalletAddress, setBalance } from "@/redux/walletSlice";
 import NFTModal from "./NFTModal";
 import { NFT } from "@/types";
 import { CONSTANTS } from "@/lib/constants";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Wallet } from "lucide-react";
+import { getBatchWrappedNFTInfo } from "@/utils/nftUtils";
+import { BrowserProvider, formatUnits } from "ethers";
+
+const WalletNotConnected = ({ onConnect }: { onConnect: () => Promise<void> }) => (
+  <div className="flex flex-col items-center justify-center min-h-[400px] p-8 bg-gray-800/50 rounded-lg">
+    <div className="bg-gray-700 p-6 rounded-full mb-6">
+      <Wallet className="w-12 h-12 text-gray-400" />
+    </div>
+    <h3 className="text-2xl font-semibold text-gray-200 mb-3">Wallet Not Connected</h3>
+    <p className="text-gray-400 text-center max-w-md mb-6">
+      Connect your wallet to view your NFT collection across different chains and manage your digital assets.
+    </p>
+    <Button 
+      variant="secondary" 
+      className="px-6 flex items-center gap-2"
+      onClick={onConnect}
+    >
+      <Wallet className="w-4 h-4" />
+      Connect Wallet
+    </Button>
+  </div>
+);
 
 export default function NFTGallery() {
   const dispatch = useAppDispatch();
-  const { address, chain, isConnected,recentCompletedTx } = useAppSelector(
+  const { address, chain, isConnected, recentCompletedTx } = useAppSelector(
     (state: RootState) => state.wallet
   );
 
@@ -25,13 +47,34 @@ export default function NFTGallery() {
   const [selectedNFT, setSelectedNFT] = useState<NFT | null>(null);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
+  const connectWallet = async () => {
+    if (!window.ethereum) {
+      setErrorMessage("Please install MetaMask!");
+      return;
+    }
+    try {
+      const provider = new BrowserProvider(window.ethereum);
+      await provider.send("eth_requestAccounts", []);
+      const signer = await provider.getSigner();
+      const walletAddress = await signer.getAddress();
+      dispatch(setWalletAddress(walletAddress));
+
+      const balanceBN = await provider.getBalance(walletAddress);
+      const formattedBalance = parseFloat(formatUnits(balanceBN, 18));
+      dispatch(setBalance(Number(formattedBalance.toFixed(4))));
+    } catch (error) {
+      console.error("Error connecting wallet:", error);
+      setErrorMessage("Failed to connect wallet. Please try again.");
+    }
+  };
+
   const fetchNFTs = useCallback(async () => {
     if (!isConnected || !address) return;
 
     setErrorMessage("");
     setIsLoading(true);
     setIsRefreshing(true);
-    console.log("recentCompletedTx",recentCompletedTx)
+    
     try {
       const options = {
         method: "GET",
@@ -50,8 +93,13 @@ export default function NFTGallery() {
 
       const res = await fetch(apiUrl, options);
       const data = await res.json();
-      if (data.nfts) {
-        setNFTs(data.nfts);
+      if (data.nfts && data.nfts.length > 0) {
+        const wrappedInfoMap = await getBatchWrappedNFTInfo(data.nfts, chain);
+        const nftsWithInfo = data.nfts.map(nft => ({
+          ...nft,
+          wrappedInfo: wrappedInfoMap[nft.identifier]
+        }));
+        setNFTs(nftsWithInfo);
       } else {
         setNFTs([]);
       }
@@ -108,22 +156,17 @@ export default function NFTGallery() {
         )}
       </div>
 
-      {!isConnected ? (
-        <Alert variant="destructive">
-          <AlertTitle>Wallet Not Connected</AlertTitle>
-          <AlertDescription>
-            Please connect your wallet from the NavBar to view NFTs.
-          </AlertDescription>
+      {errorMessage && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{errorMessage}</AlertDescription>
         </Alert>
+      )}
+
+      {!isConnected ? (
+        <WalletNotConnected onConnect={connectWallet} />
       ) : (
         <>
-          {errorMessage && (
-            <Alert variant="destructive" className="mb-4">
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>{errorMessage}</AlertDescription>
-            </Alert>
-          )}
-
           {isLoading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {Array.from({ length: 8 }).map((_, idx) => (
@@ -180,7 +223,7 @@ export default function NFTGallery() {
           ) : (
             <div className="text-center py-12">
               <p className="text-gray-400">
-                No NFTs found for this address on the {CONSTANTS.AVAILABLE_CHAINS.filter((x) => (x.chainId === chain))[0].name.toLocaleUpperCase()}  chain.
+                No NFTs found for this address on the {CONSTANTS.AVAILABLE_CHAINS.filter((x) => (x.chainId === chain))[0].name.toLocaleUpperCase()} chain.
               </p>
             </div>
           )}

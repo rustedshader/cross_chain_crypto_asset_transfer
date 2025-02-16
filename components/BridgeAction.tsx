@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRightLeft, Lock, Unlock } from "lucide-react";
+import { ArrowRightLeft, Lock, Unlock,Loader2  } from "lucide-react";
 import { toast } from 'react-toastify';
 import { decodeError } from "@/lib/utils";
 import { CONSTANTS } from "@/lib/constants";
@@ -473,7 +473,10 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({
             className="w-full"
           >
             {isLoading ? (
-              <Skeleton className="h-4 w-32" />
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Returning to Original Chain...
+              </div>
             ) : (
               <>
                 <Unlock className="mr-2 h-4 w-4" />
@@ -487,6 +490,7 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({
               value={selectedChain}
               onChange={(e) => setSelectedChain(e.target.value as keyof typeof CONSTANTS.CHAIN_CONFIG)}
               className="p-2 rounded-md bg-gray-700 text-white border border-gray-600 focus:ring-2 focus:ring-blue-500 w-full md:w-auto"
+              disabled={isLoading}
             >
               {CONSTANTS.AVAILABLE_CHAINS.map(
                 (chain) =>
@@ -503,7 +507,10 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({
               className="w-full md:w-auto"
             >
               {isLoading ? (
-                <Skeleton className="h-4 w-32" />
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Bridging NFT...
+                </div>
               ) : (
                 <>
                   <Lock className="mr-2 h-4 w-4" />

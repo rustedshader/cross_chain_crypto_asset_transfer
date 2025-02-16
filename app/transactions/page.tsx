@@ -104,7 +104,7 @@ export default function TransactionHistoryPage() {
     }
   };
 
-  const formatDate = (date: string) => {
+  const formatDate = (date: string | number) => {
     return new Date(date).toLocaleString('en-US', {
       year: 'numeric',
       month: 'short',

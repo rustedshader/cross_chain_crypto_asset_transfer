@@ -1,75 +1,97 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { createClient } from '@/utils/supabase/client';
-import { useRouter } from 'next/navigation';
-import { User, Settings, Key, LogOut } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { createClient } from "@/utils/supabase/client";
+import { useRouter } from "next/navigation";
+import { User, Settings, Key, LogOut } from "lucide-react";
+import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
+import { DeleteAccountDialog } from "@/components/DeleteAccountDialog";
+import { AvatarUpload } from "@/components/AvatarUpload";
 
+// Update the Profile interface
 interface Profile {
   id: string;
   email: string;
   name: string | null;
+  avatarBlob: string | null;
 }
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [name, setName] = useState('');
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
+  const [name, setName] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const supabase = createClient();
   const router = useRouter();
 
   useEffect(() => {
     const fetchProfile = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) {
-        router.push('/auth/login');
+        router.push("/auth/login");
         return;
       }
       const user = session.user;
-      setProfile({ 
-        id: user.id, 
-        email: user.email ?? '', 
-        name: user.user_metadata.name || null 
+      setProfile({
+        id: user.id,
+        email: user.email ?? "",
+        name: user.user_metadata.name || null,
+        avatarBlob: user.user_metadata.avatarBlob || null,
       });
-      setName(user.user_metadata.name || '');
+      setName(user.user_metadata.name || "");
     };
     fetchProfile();
   }, [router, supabase]);
 
   const handleUpdate = async () => {
     setIsLoading(true);
-    setError('');
-    setMessage('');
+    setError("");
+    setMessage("");
     try {
-      const res = await fetch('/api/profile/update', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/profile/update", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
       });
       const data = await res.json();
       if (res.ok) {
-        setMessage('Profile updated successfully!');
+        setMessage("Profile updated successfully!");
       } else {
-        setError(data.error || 'Failed to update profile');
+        setError(data.error || "Failed to update profile");
       }
     } catch (err) {
-      setError('An error occurred while updating the profile');
+      setError("An error occurred while updating the profile");
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Add handleAvatarUpdate function
+  const handleAvatarUpdate = (blob: string | null) => {
+    if (profile) {
+      setProfile({ ...profile, avatarBlob: blob });
+    }
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push('/auth/login');
+    router.push("/auth/login");
   };
 
   if (!profile) {
@@ -84,7 +106,9 @@ export default function ProfilePage() {
     <div className="max-w-3xl mx-auto p-6">
       <div className="mb-8">
         <h1 className="text-2xl font-bold">Account Settings</h1>
-        <p className="text-gray-500">Manage your account settings and preferences</p>
+        <p className="text-gray-500">
+          Manage your account settings and preferences
+        </p>
       </div>
 
       {error && (
@@ -93,7 +117,7 @@ export default function ProfilePage() {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-      
+
       {message && (
         <Alert className="mb-6">
           <AlertTitle>Success</AlertTitle>
@@ -123,10 +147,10 @@ export default function ProfilePage() {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex items-center gap-4">
-                <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center">
-                  <User className="w-8 h-8 text-gray-500" />
-                </div>
-                <Button variant="outline">Change Avatar</Button>
+                <AvatarUpload
+                  currentAvatarBlob={profile.avatarBlob}
+                  onAvatarUpdate={handleAvatarUpdate}
+                />
               </div>
 
               <div className="space-y-4">
@@ -154,7 +178,7 @@ export default function ProfilePage() {
               </div>
             </CardContent>
             <CardFooter className="flex justify-between">
-              <Button 
+              <Button
                 onClick={handleUpdate}
                 disabled={isLoading}
                 className="flex items-center gap-2"
@@ -189,7 +213,7 @@ export default function ProfilePage() {
                         </p>
                       </div>
                     </div>
-                    <Button variant="outline">Change Password</Button>
+                    <ChangePasswordDialog />
                   </div>
                 </div>
               </CardContent>
@@ -210,7 +234,7 @@ export default function ProfilePage() {
                       Permanently delete your account and all data
                     </p>
                   </div>
-                  <Button variant="destructive">Delete Account</Button>
+                  <DeleteAccountDialog />
                 </div>
 
                 <div className="flex items-center justify-between p-4 rounded-lg">
@@ -220,8 +244,8 @@ export default function ProfilePage() {
                       Sign out of your account
                     </p>
                   </div>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     onClick={handleLogout}
                     className="flex items-center gap-2"
                   >
