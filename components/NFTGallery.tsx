@@ -95,7 +95,7 @@ export default function NFTGallery() {
       const data = await res.json();
       if (data.nfts && data.nfts.length > 0) {
         const wrappedInfoMap = await getBatchWrappedNFTInfo(data.nfts, chain);
-        const nftsWithInfo = data.nfts.map(nft => ({
+        const nftsWithInfo = data.nfts.map((nft: { identifier: string; collection: string; name?: string; display_image_url?: string }) => ({
           ...nft,
           wrappedInfo: wrappedInfoMap[nft.identifier]
         }));
@@ -110,7 +110,7 @@ export default function NFTGallery() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [address, chain, isConnected, recentCompletedTx]);
+  }, [address, chain, isConnected]);
 
   useEffect(() => {
     fetchNFTs();
