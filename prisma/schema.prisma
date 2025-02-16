@@ -1,0 +1,54 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Transaction {
+  id              String   @id @default(uuid())
+  userId          String
+  type            String   // "LOCK_AND_MINT" or "BURN_AND_UNLOCK"
+  tokenId         String?
+  transferId      String?   // Store the transferId used in the contracts
+  sourceChain     String?   // Original chain where NFT was locked
+  targetChain     String?  // Chain where wrapped NFT exists
+  sourceContract  String?   // Original NFT contract address
+  targetContract  String?   // Wrapped NFT contract address
+  lockHash        String?
+  mintHash        String?
+  burnHash        String?
+  unlockHash      String?
+  timestamp       DateTime @default(now())
+  status          String //"Pending" | "Completed" | "Failed";
+  isActive        Boolean  @default(true)  // Track if NFT is currently bridged
+
+  @@index([userId])
+  @@index([transferId])
+  @@index([tokenId, isActive])
+}
+
+model WhiteListedMerkle {
+  id        String   @id @default(uuid())
+  tokenId   String
+  userAddress  String
+  timestamp DateTime @default(now())
+}
+
+
+
+// Add this to your existing schema.prisma
+model MerkleRoot {
+  id          String   @id @default(uuid())  // Good choice using UUID instead of auto-increment
+  root        String   // Correct for storing hex string of merkle root
+  emailProofs Json     // Correct for storing array of proof objects
+  timestamp   DateTime @default(now())  // Good for tracking when roots were created
+  active      Boolean  @default(true)   // Useful for managing current active root
+  emails      String[] // Correct for storing array of email strings
+  description String?  // Optional description is a good addition
+  
+  @@index([active])    // Good optimization for queries filtering by active status
+}

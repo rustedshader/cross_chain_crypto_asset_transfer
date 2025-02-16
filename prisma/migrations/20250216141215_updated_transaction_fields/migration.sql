@@ -1,0 +1,7 @@
+-- AlterTable
+ALTER TABLE "Transaction" ALTER COLUMN "tokenId" DROP NOT NULL,
+ALTER COLUMN "sourceChain" DROP NOT NULL,
+ALTER COLUMN "sourceContract" DROP NOT NULL,
+ALTER COLUMN "targetChain" DROP NOT NULL,
+ALTER COLUMN "targetContract" DROP NOT NULL,
+ALTER COLUMN "transferId" DROP NOT NULL;
