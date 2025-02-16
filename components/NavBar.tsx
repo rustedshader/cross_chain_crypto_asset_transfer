@@ -56,7 +56,7 @@ export default function NavBar() {
       }
     };
     fetchData();
-  }, [address]);
+  }, [address,chain]);
 
   // Calculate the total USD value from token balances and update the balance slice
   useEffect(() => {

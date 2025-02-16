@@ -124,7 +124,7 @@ const WalletModal: React.FC<WalletModalProps> = ({
 
         {/* Tabs */}
         <div className="flex border-b border-gray-800 mb-4">
-          {["assets", "activity", "settings"].map((tab) => (
+          {["assets", "activity"].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab as typeof activeTab)}
