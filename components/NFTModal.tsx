@@ -17,7 +17,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowRightLeft, Lock, Wallet, AlertCircle } from "lucide-react";
 import { decodeError, truncateAddress, getExplorerLink } from "@/lib/utils";
 import { CONSTANTS } from "@/lib/constants";
-import { LOCKING_CONTRACT_ABI, MINTING_CONTRACT_ABI } from "@/lib/contracts";
+import { LOCKING_CONTRACT_ABI, MINTING_CONTRACT_ABI, NFT_CONTRACT_ABI } from "@/lib/contracts";
+import { ContractError } from "@/types";
 
 // ─────────────────────────────────────────────
 // Types
@@ -297,137 +298,96 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({ nft, addTransaction }) =>
     }
   }
 
-  // Function: Mint Token on Chain A (Polygon Amoy)
-  const mintToken = useCallback(async () => {
+  const lockAndWrap = useCallback(async () => {
     setErrorMessage("");
-    if (!nft.identifier || !provider) {
-      setErrorMessage("Token id is invalid or provider not available");
+    
+    // Check that required values are available.
+    if (!nft.identifier || !provider || !nft.contract || !nft.image_url) {
+      setErrorMessage("Token id, tokenURI or NFT contract address is invalid or provider not available");
       return;
     }
+    
     setIsLoading(true);
-
-    const leaf = ethers.keccak256(
-      ethers.toUtf8Bytes(`${nft.identifier}-${userAddress}`)
-    );
-    const proof: any = await fetchMerkleProof(nft.identifier, userAddress);
-    if (!proof) {
-      setErrorMessage("Failed to fetch Merkle proof");
-      setIsLoading(false);
-      return;
-    }
-    const verifierAddress = "0xYourDeployedMerkleVerifierAddress";
     const pendingRecord = await insertTransactionRecord({
-      type: "Create and Mint Token on Chain A",
+      type: "Lock on Chain A and Wrap on Chain B",
       tokenId: nft.identifier,
       status: "Pending",
       sender: userAddress,
       receiver: userAddress,
       timestamp: Date.now(),
     });
+    
     try {
+      // --- PART 1: Lock NFT on Chain A (AMOY) ---
+      
+      // Switch to the chain where the SourceChainGateway is deployed.
+      await switchToChain("AMOY");
       const signer = await provider.getSigner();
-      const verifierContract = new Contract(
-        verifierAddress,
-        [
-          "function verifyProof(bytes32[] calldata proof, bytes32 leaf) external view returns (bool)",
-        ],
+      
+      // Create an instance of the NFT contract with signer (for approval & ownership check)
+      const nftContract = new Contract(nft.contract, NFT_CONTRACT_ABI, signer);
+      
+      // Verify NFT ownership
+      const owner = await nftContract.ownerOf(nft.identifier);
+      if (owner.toLowerCase() !== userAddress.toLowerCase()) {
+        throw new Error("You don't own this NFT");
+      }
+      
+      // Approve the SourceChainGateway (locking contract) to transfer your NFT
+      const approveTx = await nftContract.approve(CONSTANTS.LOCKING_CONTRACT, nft.identifier, {
+        gasLimit: 500000,
+      });
+      await approveTx.wait();
+      
+      // Create an instance of the SourceChainGateway contract
+      const lockingContract = new Contract(
+        CONSTANTS.LOCKING_CONTRACT,
+        LOCKING_CONTRACT_ABI,
         signer
       );
-      const isValid = await verifierContract.verifyProof(proof, leaf);
-      if (!isValid) {
-        if (pendingRecord?.id)
-          await updateTransactionRecord(pendingRecord.id, { status: "Failed" });
-        throw new Error("Merkle proof verification failed");
-      }
-      await switchToChain("AMOY");
-      const signerA = await provider.getSigner();
-      const lockingContract = new Contract(
-        CONSTANTS.LOCKING_CONTRACT,
-        LOCKING_CONTRACT_ABI,
-        signerA
+      
+      // Generate a unique transfer ID (ensure uniqueness in your application)
+      const transferId = ethers.keccak256(
+        ethers.toUtf8Bytes(`${userAddress}-${nft.identifier}-${Date.now()}`)
       );
-      const mintTx = await lockingContract.mint(userAddress, nft.identifier, {
-        gasLimit: 300000,
-      });
-      await mintTx.wait();
-      addTransaction({
-        mintHash: mintTx.hash,
-        timestamp: Date.now(),
-        sender: userAddress,
-        receiver: userAddress,
-        tokenId: nft.identifier,
-        type: "Create and Mint Token on Chain A",
-        status: "Completed",
-      });
-      if (pendingRecord?.id)
-        await updateTransactionRecord(pendingRecord.id, {
-          mintHash: mintTx.hash,
-          status: "Completed",
-        });
-      alert("Token minted successfully on Polygon Amoy!");
-    } catch (error) {
-      console.error("Error:", error);
-      setErrorMessage(decodeError(error as Error));
-      if (pendingRecord?.id)
-        await updateTransactionRecord(pendingRecord.id, { status: "Failed" });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [
-    nft.identifier,
-    provider,
-    userAddress,
-    insertTransactionRecord,
-    updateTransactionRecord,
-    switchToChain,
-    addTransaction,
-  ]);
-
-  // Function: Lock on Chain A then Mint on Chain B
-  const lockAndMint = useCallback(async () => {
-    setErrorMessage("");
-    if (!nft.identifier || !provider) {
-      setErrorMessage("Token id is invalid or provider not available");
-      return;
-    }
-    setIsLoading(true);
-    const pendingRecord = await insertTransactionRecord({
-      type: "Lock on Chain A and Mint Token on Chain B",
-      tokenId: nft.identifier,
-      status: "Pending",
-      sender: userAddress,
-      receiver: userAddress,
-      timestamp: Date.now(),
-    });
-    try {
-      // Step 1: Lock on Chain A
-      await switchToChain("AMOY");
-      const signerA = await provider.getSigner();
-      const lockingContract = new Contract(
-        CONSTANTS.LOCKING_CONTRACT,
-        LOCKING_CONTRACT_ABI,
-        signerA
+      
+      // Call lockNFT on the SourceChainGateway
+      const lockTx = await lockingContract.lockNFT(
+        nft.contract,
+        nft.identifier,
+        transferId,
+        { gasLimit: 500000 }
       );
-      const isOwner = await checkTokenOwnership(lockingContract, nft.identifier);
-      if (!isOwner) throw new Error("You don't own this token");
-      const isLocked = await lockingContract.lockedTokens(nft.identifier);
-      if (isLocked) throw new Error("Token is already locked");
-      const lockTx = await lockingContract.lockToken(nft.identifier, userAddress, {
-        gasLimit: 500000,
-      });
       await lockTx.wait();
-      // Step 2: Mint on Chain B
+      
+      // --- PART 2: Mint Wrapped NFT on CARDONA ---
+      
+      // Switch network to CARDONA where the DestinationChainGateway is deployed
       await switchToChain("CARDONA");
-      const signerB = await provider.getSigner();
-      const mintingContract = new Contract(
+      // Re-obtain the signer on the new network
+      const signerCardona = await provider.getSigner();
+      
+      // Create an instance of the DestinationChainGateway contract
+      const destinationContract = new Contract(
         CONSTANTS.MINTING_CONTRACT,
         MINTING_CONTRACT_ABI,
-        signerB
+        signerCardona
       );
-      const mintTx = await mintingContract.mintToken(nft.identifier, userAddress, {
-        gasLimit: 500000,
-      });
+      
+      // Call mintWrappedNFT to mint the wrapped NFT on CARDONA.
+      // Note: _to is the recipient, _originalContract is the original NFT contract,
+      // _tokenId is the original token id, _transferId is the same unique id, and _tokenURI is passed along.
+      const mintTx = await destinationContract.mintWrappedNFT(
+        userAddress,
+        nft.contract,
+        nft.identifier,
+        transferId,
+        nft.image_url,
+        { gasLimit: 500000 }
+      );
       await mintTx.wait();
+      
+      // Record the transaction details in your app
       addTransaction({
         lockHash: lockTx.hash,
         mintHash: mintTx.hash,
@@ -435,19 +395,21 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({ nft, addTransaction }) =>
         sender: userAddress,
         receiver: userAddress,
         tokenId: nft.identifier,
-        type: "Lock on Chain A and Mint Token on Chain B",
+        type: "Lock on Chain A and Wrap on Chain B",
         status: "Completed",
       });
-      if (pendingRecord?.id)
+      if (pendingRecord?.id) {
         await updateTransactionRecord(pendingRecord.id, {
           lockHash: lockTx.hash,
           mintHash: mintTx.hash,
           status: "Completed",
         });
-      alert("Token locked on Amoy and minted on Polygon zkEVM Cardona successfully!");
+      }
+      
+      alert("NFT locked on Chain A and wrapped on CARDONA successfully!");
     } catch (error) {
       console.error("Error:", error);
-      setErrorMessage(decodeError(error as Error));
+      setErrorMessage(decodeError(error as ContractError));
       if (pendingRecord?.id)
         await updateTransactionRecord(pendingRecord.id, { status: "Failed" });
     } finally {
@@ -455,21 +417,24 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({ nft, addTransaction }) =>
     }
   }, [
     nft.identifier,
+    nft.contract,
+    nft.image_url,
     provider,
     userAddress,
     insertTransactionRecord,
     updateTransactionRecord,
     switchToChain,
-    checkTokenOwnership,
     addTransaction,
   ]);
+  
+  
 
   // Handler: call mintToken or lockAndMint based on dropdown selection
   const handleBridge = async () => {
     if (selectedChain === "AMOY") {
-      await mintToken();
+      await lockAndWrap();
     } else if (selectedChain === "CARDONA") {
-      await lockAndMint();
+      await lockAndWrap();
     }
   };
 
@@ -504,7 +469,7 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({ nft, addTransaction }) =>
             ) : (
               <>
                 <Lock className="mr-2 h-4 w-4" />
-                Lock and Mint on Cardona
+                Lock And Wrap Contract
               </>
             )}
           </Button>
