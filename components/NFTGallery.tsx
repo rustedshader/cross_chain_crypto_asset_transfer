@@ -16,17 +16,24 @@ import { getBatchWrappedNFTInfo } from "@/utils/nftUtils";
 import { BrowserProvider, formatUnits } from "ethers";
 import { Badge } from "@/components/ui/badge";
 
-const WalletNotConnected = ({ onConnect }: { onConnect: () => Promise<void> }) => (
+const WalletNotConnected = ({
+  onConnect,
+}: {
+  onConnect: () => Promise<void>;
+}) => (
   <div className="flex flex-col items-center justify-center min-h-[400px] p-8 bg-gray-800/50 rounded-lg">
     <div className="bg-gray-700 p-6 rounded-full mb-6">
       <Wallet className="w-12 h-12 text-gray-400" />
     </div>
-    <h3 className="text-2xl font-semibold text-gray-200 mb-3">Wallet Not Connected</h3>
+    <h3 className="text-2xl font-semibold text-gray-200 mb-3">
+      Wallet Not Connected
+    </h3>
     <p className="text-gray-400 text-center max-w-md mb-6">
-      Connect your wallet to view your NFT collection across different chains and manage your digital assets.
+      Connect your wallet to view your NFT collection across different chains
+      and manage your digital assets.
     </p>
-    <Button 
-      variant="secondary" 
+    <Button
+      variant="secondary"
       className="px-6 flex items-center gap-2"
       onClick={onConnect}
     >
@@ -75,7 +82,7 @@ export default function NFTGallery() {
     setErrorMessage("");
     setIsLoading(true);
     setIsRefreshing(true);
-    
+
     try {
       const options = {
         method: "GET",
@@ -84,22 +91,29 @@ export default function NFTGallery() {
           "x-api-key": "3c425fb533ed4602be376f8b83949233",
         },
       };
-      let apiUrl = ``
-      if (chain === "OP_SEPOLIA"){
+      let apiUrl = ``;
+      if (chain === "OP_SEPOLIA") {
         apiUrl = `https://testnets-api.opensea.io/api/v2/chain/optimism_sepolia/account/${address}/nfts`;
-      }
-      else{
-       apiUrl = `https://testnets-api.opensea.io/api/v2/chain/${chain.toLowerCase()}/account/${address}/nfts`;
+      } else {
+        apiUrl = `https://testnets-api.opensea.io/api/v2/chain/${chain.toLowerCase()}/account/${address}/nfts`;
       }
 
       const res = await fetch(apiUrl, options);
       const data = await res.json();
       if (data.nfts && data.nfts.length > 0) {
         const wrappedInfoMap = await getBatchWrappedNFTInfo(data.nfts, chain);
-        const nftsWithInfo = data.nfts.map((nft: { identifier: string; collection: string; name?: string; display_image_url?: string ;wrappedInfo? : any}) => ({
-          ...nft,
-          wrappedInfo: wrappedInfoMap[nft.identifier]
-        }));
+        const nftsWithInfo = data.nfts.map(
+          (nft: {
+            identifier: string;
+            collection: string;
+            name?: string;
+            display_image_url?: string;
+            wrappedInfo?: any;
+          }) => ({
+            ...nft,
+            wrappedInfo: wrappedInfoMap[nft.identifier],
+          })
+        );
         setNFTs(nftsWithInfo);
       } else {
         setNFTs([]);
@@ -130,12 +144,18 @@ export default function NFTGallery() {
             View and manage your NFTs across different chains
           </p>
         </div>
-        
+
         {isConnected && (
           <div className="flex items-center gap-4">
             <select
               value={chain}
-              onChange={(e) => dispatch(setChain(e.target.value as keyof typeof CONSTANTS.CHAIN_CONFIG))}
+              onChange={(e) =>
+                dispatch(
+                  setChain(
+                    e.target.value as keyof typeof CONSTANTS.CHAIN_CONFIG
+                  )
+                )
+              }
               className="border border-gray-600 rounded-md p-2 text-sm bg-gray-700 text-white focus:ring-2 focus:ring-blue-500"
             >
               {CONSTANTS.AVAILABLE_CHAINS.map((chain) => (
@@ -150,7 +170,9 @@ export default function NFTGallery() {
               disabled={isRefreshing}
               className="flex items-center gap-2"
             >
-              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <RefreshCw
+                className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
+              />
               Refresh
             </Button>
           </div>
@@ -175,7 +197,7 @@ export default function NFTGallery() {
               ))}
             </div>
           ) : nfts.length > 0 ? (
-            <motion.div 
+            <motion.div
               className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -192,14 +214,19 @@ export default function NFTGallery() {
                     onClick={() => setSelectedNFT(nft)}
                   >
                     <CardHeader>
-                      <CardTitle className="text-sm truncate">
-                        {nft.name || `NFT #${nft.identifier}`}
-                      </CardTitle>
-                      {nft?.wrappedInfo.isWrapped && (
-                      <Badge variant="secondary" className="bg-purple-500/20 text-purple-300 border-purple-500/50">
-                        Wrapped NFT
-                      </Badge>
-                    )}
+                      <div className="flex items-center gap-3">
+                        <CardTitle className="text-sm truncate">
+                          {nft.name || `NFT #${nft.identifier}`}
+                        </CardTitle>
+                        {nft?.wrappedInfo.isWrapped && (
+                          <Badge
+                            variant="secondary"
+                            className="bg-purple-500/20 text-purple-300 border-purple-500/50"
+                          >
+                            Wrapped NFT
+                          </Badge>
+                        )}
+                      </div>
                     </CardHeader>
                     <CardContent>
                       {nft.display_image_url ? (
@@ -215,7 +242,9 @@ export default function NFTGallery() {
                         </div>
                       ) : (
                         <div className="w-full h-40 bg-gray-700 flex items-center justify-center rounded-md">
-                          <span className="text-gray-500 text-sm">No Image</span>
+                          <span className="text-gray-500 text-sm">
+                            No Image
+                          </span>
                         </div>
                       )}
                       <p className="text-xs mt-2 text-gray-400 truncate">
@@ -229,7 +258,11 @@ export default function NFTGallery() {
           ) : (
             <div className="text-center py-12">
               <p className="text-gray-400">
-                No NFTs found for this address on the {CONSTANTS.AVAILABLE_CHAINS.filter((x) => (x.chainId === chain))[0].name.toLocaleUpperCase()} chain.
+                No NFTs found for this address on the{" "}
+                {CONSTANTS.AVAILABLE_CHAINS.filter(
+                  (x) => x.chainId === chain
+                )[0].name.toLocaleUpperCase()}{" "}
+                chain.
               </p>
             </div>
           )}
