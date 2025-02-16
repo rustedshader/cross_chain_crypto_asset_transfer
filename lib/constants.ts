@@ -41,7 +41,7 @@ export const CONSTANTS = {
         },
         rpcUrls: ["https://rpc-amoy.polygon.technology"],
         blockExplorerUrls: ["https://amoy.polygonscan.com"],
-        source_contract: "0xDE870F845CF20c10ea7fdB39d2EB5Ac7cC2e1F53",
+        source_contract: "0x1747e261d5991112f51f4a565f517303ef45ec6a",
         destination_contract: ""
       },
       BASE_SEPOLIA: {
@@ -55,7 +55,7 @@ export const CONSTANTS = {
         rpcUrls: ["https://sepolia.base.org"],
         blockExplorerUrls: ["https://sepolia.polygonscan.com"],
         source_contract: "0x82566223A41cf933445a2D89Ff7dAE409ac182e1",
-        destination_contract: "0xd4aab671d7ef5872e5dc1c7dc12a190254152b7e"
+        destination_contract: "0xCAF4f8CD0b7d84Aaecf2de055B5324f42e048162"
       },
       OP_SEPOLIA: {
         chainId: "0xaa37dc",

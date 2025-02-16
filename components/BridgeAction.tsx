@@ -79,11 +79,14 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({
     mintingContract: Contract,
     transferId: string
   ) => {
+    return true;
     // Check if transfer is already processed on either chain
-    const [isProcessedSource, isProcessedDest] = await Promise.all([
-      lockingContract.processedTransfers(transferId),
-      mintingContract.processedTransfers(transferId)
-    ]);
+    // const [isProcessedSource, isProcessedDest] = await Promise.all([
+    //   lockingContract.processedTransfers(transferId),
+    //   mintingContract.processedTransfers(transferId)
+    // ]);
+    const isProcessedSource = await lockingContract.processedTransfers(transferId);
+    const isProcessedDest = await mintingContract.processedTransfers(transferId);
 
     if (isProcessedSource || isProcessedDest) {
       throw new Error("Transfer ID already used");
