@@ -302,7 +302,7 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({ nft, addTransaction }) =>
     setErrorMessage("");
     
     // Check that required values are available.
-    if (!nft.identifier || !provider || !nft.contract || !nft.image_url) {
+    if (!nft.identifier || !provider || !nft.contract || !nft.opensea_url) {
       setErrorMessage("Token id, tokenURI or NFT contract address is invalid or provider not available");
       return;
     }
@@ -382,7 +382,7 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({ nft, addTransaction }) =>
         nft.contract,
         nft.identifier,
         transferId,
-        nft.image_url,
+        nft.opensea_url,
         { gasLimit: 500000 }
       );
       await mintTx.wait();
@@ -418,7 +418,7 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({ nft, addTransaction }) =>
   }, [
     nft.identifier,
     nft.contract,
-    nft.image_url,
+    nft.opensea_url,
     provider,
     userAddress,
     insertTransactionRecord,
@@ -432,8 +432,10 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({ nft, addTransaction }) =>
   // Handler: call mintToken or lockAndMint based on dropdown selection
   const handleBridge = async () => {
     if (selectedChain === "AMOY") {
+      console.log(nft);
       await lockAndWrap();
     } else if (selectedChain === "CARDONA") {
+      console.log(nft);
       await lockAndWrap();
     }
   };
