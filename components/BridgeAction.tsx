@@ -9,9 +9,8 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRightLeft, Lock, AlertCircle } from "lucide-react";
+import { ArrowRightLeft, Lock } from "lucide-react";
 import { toast } from 'react-toastify';
 import { decodeError } from "@/lib/utils";
 import { CONSTANTS } from "@/lib/constants";
@@ -75,16 +74,45 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({
     []
   );
 
+  const verifyTransferState = async (
+    lockingContract: Contract,
+    mintingContract: Contract,
+    transferId: string
+  ) => {
+    // Check if transfer is already processed on either chain
+    const [isProcessedSource, isProcessedDest] = await Promise.all([
+      lockingContract.processedTransfers(transferId),
+      mintingContract.processedTransfers(transferId)
+    ]);
+
+    if (isProcessedSource || isProcessedDest) {
+      throw new Error("Transfer ID already used");
+    }
+  };
+
+  const unlockNFT = async (
+    lockingContract: Contract,
+    transferId: string
+  ) => {
+    const unlockTx = await lockingContract.unlockNFT(transferId, {
+      gasLimit: 500000
+    });
+    await unlockTx.wait();
+    toast.info("NFT unlocked successfully", { position: "top-right" });
+  };
+
   const lockAndWrap = useCallback(async () => {
     if (!nft.identifier || !provider || !nft.contract || !nft.opensea_url) {
       toast.error("Invalid NFT data or provider not available", {
-        position: "top-right",
+        position: "top-right"
       });
       return;
     }
 
-    console.log("NFT---->", nft);
     setIsLoading(true);
+    let lockingContract: Contract | null = null;
+    let transferId: string | null = null;
+    
     const pendingRecord = await insertTransactionRecord({
       type: "Lock on Chain A and Wrap on Chain B",
       tokenId: nft.identifier,
@@ -95,12 +123,36 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({
     });
 
     try {
-      // Switch to source chain
-      await switchToChain(sourceChain);
-      const signer = await provider.getSigner();
+      // Generate transfer ID first
+      transferId = ethers.keccak256(
+        ethers.toUtf8Bytes(`${userAddress}-${nft.identifier}-${Date.now()}`)
+      );
 
-      // Create NFT contract instance
-      const nftContract = new Contract(nft.contract, NFT_CONTRACT_ABI, signer);
+      // Switch to source chain and get contracts
+      await switchToChain(sourceChain);
+      const sourceSigner = await provider.getSigner();
+      
+      lockingContract = new Contract(
+        CONSTANTS.CHAIN_CONFIG[sourceChain].source_contract,
+        LOCKING_CONTRACT_ABI,
+        sourceSigner
+      );
+
+      // Switch to destination chain to verify state
+      await switchToChain(selectedChain);
+      const destSigner = await provider.getSigner();
+      const mintingContract = new Contract(
+        CONSTANTS.CHAIN_CONFIG[selectedChain].destination_contract,
+        MINTING_CONTRACT_ABI,
+        destSigner
+      );
+
+      // Verify transfer state on both chains
+      await verifyTransferState(lockingContract, mintingContract, transferId);
+
+      // Switch back to source chain for locking
+      await switchToChain(sourceChain);
+      const nftContract = new Contract(nft.contract, NFT_CONTRACT_ABI, sourceSigner);
 
       // Verify ownership
       const owner = await nftContract.ownerOf(nft.identifier);
@@ -119,18 +171,6 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({
 
       // Lock NFT
       toast.info("Locking NFT on source chain...", { position: "top-right" });
-      const lockingContract = new Contract(
-        CONSTANTS.CHAIN_CONFIG[sourceChain].source_contract,
-        LOCKING_CONTRACT_ABI,
-        signer
-      );
-
-      const transferId = ethers.keccak256(
-        ethers.toUtf8Bytes(`${userAddress}-${nft.identifier}-${Date.now()}`)
-      );
-
-      console.log("Transfer ID:", transferId);
-    
       const lockTx = await lockingContract.lockNFT(
         nft.contract,
         nft.identifier,
@@ -139,49 +179,64 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({
       );
       await lockTx.wait();
 
+      // Verify lock was successful
+      const transfer = await lockingContract.transfers(transferId);
+      if (!transfer.processed) {
+        throw new Error("Lock transaction failed");
+      }
+
       // Switch to destination chain
       toast.info("Switching to destination chain...", { position: "top-right" });
       await switchToChain(selectedChain);
-      const signerDest = await provider.getSigner();
-
+      
       // Mint wrapped NFT
       toast.info("Minting wrapped NFT...", { position: "top-right" });
-      const destinationContract = new Contract(
-        CONSTANTS.CHAIN_CONFIG[selectedChain].destination_contract,
-        MINTING_CONTRACT_ABI,
-        signerDest
-      );
+      try {
+        const mintTx = await mintingContract.mintWrappedNFT(
+          userAddress,
+          nft.contract,
+          nft.identifier,
+          transferId,
+          nft.opensea_url,
+          { gasLimit: 500000 }
+        );
+        await mintTx.wait();
 
-      const mintTx = await destinationContract.mintWrappedNFT(
-        userAddress,
-        nft.contract,
-        nft.identifier,
-        transferId,
-        nft.opensea_url,
-        { gasLimit: 500000 }
-      );
-      await mintTx.wait();
+        // Verify mint was successful
+        const isProcessedDest = await mintingContract.processedTransfers(transferId);
+        if (!isProcessedDest) {
+          throw new Error("Mint verification failed");
+        }
 
-      // Record successful transaction
-      const txDetails = {
-        lockHash: lockTx.hash,
-        mintHash: mintTx.hash,
-        timestamp: Date.now(),
-        sender: userAddress,
-        receiver: userAddress,
-        tokenId: nft.identifier,
-        type: "Lock on Chain A and Wrap on Chain B",
-        status: "Completed",
-      };
-
-      addTransaction(txDetails);
-      
-      if (pendingRecord?.id) {
-        await updateTransactionRecord(pendingRecord.id, {
+        // Record successful transaction
+        const txDetails = {
           lockHash: lockTx.hash,
           mintHash: mintTx.hash,
+          timestamp: Date.now(),
+          sender: userAddress,
+          receiver: userAddress,
+          tokenId: nft.identifier,
+          type: "Lock on Chain A and Wrap on Chain B",
           status: "Completed",
-        });
+        };
+
+        addTransaction(txDetails);
+        
+        if (pendingRecord?.id) {
+          await updateTransactionRecord(pendingRecord.id, {
+            lockHash: lockTx.hash,
+            mintHash: mintTx.hash,
+            status: "Completed",
+          });
+        }
+
+        toast.success("NFT successfully bridged!", { position: "top-right" });
+      } catch (mintError) {
+        // If minting fails, unlock the NFT
+        toast.error("Minting failed, initiating rollback...", { position: "top-right" });
+        await switchToChain(sourceChain);
+        await unlockNFT(lockingContract, transferId);
+        throw new Error("Minting failed, NFT has been unlocked");
       }
 
     } catch (error) {
@@ -205,10 +260,6 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({
     selectedChain,
     sourceChain,
   ]);
-
-  const handleBridge = async () => {
-    await lockAndWrap();
-  };
 
   return (
     <Card className="bg-gray-800 text-white mt-6">
@@ -238,7 +289,7 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({
             )}
           </select>
           <Button 
-            onClick={handleBridge} 
+            onClick={lockAndWrap} 
             disabled={isLoading} 
             className="h-12 w-full md:w-auto"
           >
