@@ -23,7 +23,7 @@ model Transaction {
   burnHash        String?
   unlockHash      String?
   timestamp       DateTime @default(now())
-  status          String
+  status          String //"Pending" | "Completed" | "Failed";
   isActive        Boolean  @default(true)  // Track if NFT is currently bridged
 
   @@index([userId])

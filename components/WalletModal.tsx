@@ -1,10 +1,9 @@
 "use client";
-
 import React, { useState, useRef, useEffect } from "react";
-import { FaChevronDown, FaChevronUp, FaPlus, FaCopy } from "react-icons/fa";
+import { Wallet, X, ChevronDown, ChevronUp, Copy, Power } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAppDispatch } from "@/redux/hooks";
-import { setChain } from "@/redux/walletSlice";
+import { setChain, resetWallet } from "@/redux/walletSlice";
 import { CONSTANTS } from "@/lib/constants";
 
 interface ChainInfo {
@@ -22,18 +21,18 @@ interface Transaction {
   type: string;
   amount: string;
   usdValue: string;
-  icon?: string; // you can store an icon or image URL
 }
 
 interface WalletModalProps {
   isOpen: boolean;
   onClose: () => void;
-  address: string;           // e.g. "0x3752...ecd1"
-  usdBalance: string;        // e.g. "0.26"
-  tokens: Token[];           // array of token objects
-  transactions: Transaction[]; // array of transaction objects
-  chainList: ChainInfo[];    // array of chains to display
-  currentChain: string;      // current chain from Redux (e.g. "amoy")
+  address: string;
+  usdBalance: string;
+  tokens: Token[];
+  transactions: Transaction[];
+  chainList: ChainInfo[];
+  currentChain: string;
+  handleLogout: () => void;
 }
 
 const WalletModal: React.FC<WalletModalProps> = ({
@@ -45,178 +44,164 @@ const WalletModal: React.FC<WalletModalProps> = ({
   transactions,
   chainList,
   currentChain,
+  handleLogout,
 }) => {
   const [showChainDropdown, setShowChainDropdown] = useState(false);
-  const [selectedChain, setSelectedChain] = useState<ChainInfo | null>(null);
-  const [activeTab, setActiveTab] = useState<"Crypto" | "Transactions" | "Settings">("Crypto");
-
+  const [activeTab, setActiveTab] = useState<"assets" | "activity" | "settings">("assets");
+  const modalRef = useRef<HTMLDivElement>(null);
   const dispatch = useAppDispatch();
 
-  const dropdownRef = useRef<HTMLDivElement>(null);
-//   const dropdownRef = useRef<HTMLDivElement>(null);
-  // Sync local selectedChain state with the chain from Redux
-  useEffect(() => {
-    const foundChain = chainList.find((c) => c.chainId === currentChain);
-    if (foundChain) {
-      setSelectedChain(foundChain);
-    } else {
-      // If we can’t find it, default to the first chain in the list
-      setSelectedChain(chainList[0] || null);
-    }
-  }, [currentChain, chainList]);
-
-  // Handle chain selection
   const handleChainSelect = (chain: ChainInfo) => {
     setShowChainDropdown(false);
     dispatch(setChain(chain.chainId as keyof typeof CONSTANTS.CHAIN_CONFIG));
   };
 
-  const copyAddressToClipboard = () => {
+  const copyAddress = () => {
     navigator.clipboard.writeText(address);
-    // alert("Address copied to clipboard!");
   };
+
+  const disconnectWallet = () => {
+    dispatch(resetWallet());
+    onClose();
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
+        onClose();
+      }
+    };
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
   return (
-    <div
-      ref={dropdownRef}
-      className="absolute right-0 mt-2 w-[600px] bg-[#1B1B1B] text-white rounded-xl shadow-lg overflow-hidden z-50"
-    >
-      {/* HEADER */}
-      <div className="flex flex-col p-4 border-b border-gray-700">
-        {/* Top row: Address + Copy + Chain selector */}
-        <div className="flex items-center justify-between">
+    <div ref={modalRef} className="absolute right-0 top-12 w-96 bg-gray-900 rounded-xl shadow-xl z-50">
+      {/* Header */}
+      <div className="p-4 border-b border-gray-800 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Wallet className="w-5 h-5 text-blue-400" />
+          <span className="font-semibold">My Wallet</span>
+        </div>
+        <button onClick={onClose} className="text-gray-400 hover:text-white">
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Main Content */}
+      <div className="p-4">
+        {/* Address and Chain Selector */}
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <span className="font-mono text-sm">{address.slice(0, 6)}...{address.slice(-4)}</span>
-            <button onClick={copyAddressToClipboard}>
-              <FaCopy size={14} className="text-gray-400 hover:text-white" />
+            <span className="font-mono text-sm bg-gray-800 px-2 py-1 rounded">
+              {address.slice(0, 6)}...{address.slice(-4)}
+            </span>
+            <button onClick={copyAddress} className="text-gray-400 hover:text-white">
+              <Copy className="w-4 h-4" />
             </button>
           </div>
-          {/* Chain selector */}
           <div className="relative">
             <button
               onClick={() => setShowChainDropdown(!showChainDropdown)}
-              className="flex items-center gap-1 px-2 py-1 bg-gray-700 rounded-md text-sm"
+              className="flex items-center gap-1 px-3 py-1 bg-gray-800 rounded-lg text-sm"
             >
               {currentChain}
-              {showChainDropdown ? <FaChevronUp size={12} /> : <FaChevronDown size={12} />}
+              {showChainDropdown ? (
+                <ChevronUp className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              )}
             </button>
             {showChainDropdown && (
-              <ul className="absolute right-0 mt-1 w-48 bg-[#2A2A2A] border border-gray-600 rounded-md shadow-md max-h-64 overflow-auto z-50">
+              <div className="absolute right-0 mt-2 w-48 bg-gray-800 rounded-lg shadow-lg overflow-hidden z-10">
                 {chainList.map((chain) => (
-                  <li
+                  <button
                     key={chain.chainId}
                     onClick={() => handleChainSelect(chain)}
-                    className="px-3 py-2 text-sm hover:bg-gray-600 cursor-pointer"
+                    className="w-full px-4 py-2 text-left text-sm hover:bg-gray-700 transition-colors"
                   >
                     {chain.name}
-                  </li>
+                  </button>
                 ))}
-              </ul>
+              </div>
             )}
           </div>
         </div>
-        {/* Second row: Balance + plus button */}
-        <div className="flex items-center justify-between mt-4">
-          <div>
-            <div className="text-2xl font-semibold">${usdBalance} USD</div>
-            <div className="text-xs text-gray-400">Wallet balance</div>
-          </div>
-          {/* <button className="bg-gray-700 p-2 rounded-md hover:bg-gray-600 transition-colors">
-            <FaPlus />
-          </button> */}
-        </div>
-      </div>
 
-      {/* BODY (Tabs) */}
-      <div className="p-4 max-h-[400px] overflow-y-auto">
-        {/* Render tab content */}
-        {activeTab === "Crypto" && (
-          <div>
-            <h2 className="text-md mb-2 font-medium">Tokens</h2>
-            <div className="flex flex-col gap-3">
+        {/* Balance */}
+        <div className="text-center mb-6">
+          <div className="text-3xl font-bold mb-1">${usdBalance}</div>
+          <div className="text-sm text-gray-400">Total Balance</div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-gray-800 mb-4">
+          {["assets", "activity", "settings"].map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab as typeof activeTab)}
+              className={`flex-1 px-4 py-2 text-sm font-medium ${
+                activeTab === tab
+                  ? "text-blue-400 border-b-2 border-blue-400"
+                  : "text-gray-400 hover:text-gray-300"
+              }`}
+            >
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab Content */}
+        <div className="max-h-64 overflow-y-auto">
+          {activeTab === "assets" && (
+            <div className="space-y-3">
               {tokens.map((token, idx) => (
                 <div
                   key={idx}
-                  className="flex items-center justify-between bg-[#2A2A2A] rounded-md p-3"
+                  className="flex items-center justify-between p-3 bg-gray-800 rounded-lg"
                 >
-                  {/* Token symbol + balance */}
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-purple-500 flex items-center justify-center">
-                      <span className="text-xs font-bold">{token.symbol[0]}</span>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                      <span className="text-sm font-bold">{token.symbol[0]}</span>
                     </div>
                     <div>
-                      <div className="text-sm font-semibold">{token.symbol}</div>
-                      <div className="text-xs text-gray-400">
-                        {token.balance} {token.symbol}
-                      </div>
+                      <div className="font-medium">{token.symbol}</div>
+                      <div className="text-sm text-gray-400">{token.balance}</div>
                     </div>
                   </div>
-                  <div className="text-sm">${token.usdValue} USD</div>
+                  <div className="text-right">
+                    <div>${token.usdValue}</div>
+                  </div>
                 </div>
               ))}
             </div>
-          </div>
-        )}
-        {activeTab === "Transactions" && (
-          <div>
-            <h2 className="text-md mb-2 font-medium">Transactions</h2>
-            <div className="flex flex-col gap-2">
-              {transactions.map((tx, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center justify-between bg-[#2A2A2A] rounded-md p-3"
-                >
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 bg-gray-500 rounded-full flex items-center justify-center" />
-                    <div>
-                      <div className="text-sm font-semibold truncate w-36">{tx.type}</div>
-                      <div className="text-xs text-gray-400">{tx.amount}</div>
-                    </div>
-                  </div>
-                  <div className="text-sm">{tx.usdValue}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        {activeTab === "Settings" && (
-          <div>
-            <h2 className="text-md mb-2 font-medium">Settings</h2>
-            <p className="text-sm text-gray-400">
-              Manage wallet settings (e.g., security, network configuration, etc.)
-            </p>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {/* FOOTER (Tab navigation) */}
-      <div className="flex items-center justify-around border-t border-gray-700 bg-[#2A2A2A] p-2">
-        <button
-          onClick={() => setActiveTab("Crypto")}
-          className={`flex flex-col items-center justify-center px-4 py-2 ${
-            activeTab === "Crypto" ? "text-white" : "text-gray-400"
-          }`}
-        >
-          <span className="text-sm">Crypto</span>
-        </button>
-        {/* <button
-          onClick={() => setActiveTab("Transactions")}
-          className={`flex flex-col items-center justify-center px-4 py-2 ${
-            activeTab === "Transactions" ? "text-white" : "text-gray-400"
-          }`}
-        >
-          <span className="text-sm">Transactions</span>
-        </button> */}
-        <button
-          onClick={() => setActiveTab("Settings")}
-          className={`flex flex-col items-center justify-center px-4 py-2 ${
-            activeTab === "Settings" ? "text-white" : "text-gray-400"
-          }`}
-        >
-          <span className="text-sm">Settings</span>
-        </button>
+      {/* Footer */}
+      <div className="p-4 border-t border-gray-800">
+        <div className="flex gap-2">
+          <Button
+            onClick={disconnectWallet}
+            variant="outline"
+            className="flex-1 flex items-center justify-center gap-2"
+          >
+            <Power className="w-4 h-4" />
+            Disconnect
+          </Button>
+          <Button
+            onClick={handleLogout}
+            variant="destructive"
+            className="flex-1"
+          >
+            Logout
+          </Button>
+        </div>
       </div>
     </div>
   );
