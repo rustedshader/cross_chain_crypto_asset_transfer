@@ -5,23 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useAppDispatch } from "@/redux/hooks";
 import { setChain, resetWallet } from "@/redux/walletSlice";
 import { CONSTANTS } from "@/lib/constants";
-
-interface ChainInfo {
-  name: string;
-  chainId: string;
-}
-
-interface Token {
-  symbol: string;
-  balance: string;
-  usdValue: string;
-}
-
-interface Transaction {
-  type: string;
-  amount: string;
-  usdValue: string;
-}
+import { Token, Transaction, ChainInfo } from "@/types/walletTypes";
 
 interface WalletModalProps {
   isOpen: boolean;
@@ -180,6 +164,44 @@ const WalletModal: React.FC<WalletModalProps> = ({
               ))}
             </div>
           )}
+
+          {activeTab === "activity" && (
+            <div className="space-y-3">
+              {transactions.length > 0 ? (
+                transactions.map((tx, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between p-3 bg-gray-800 rounded-lg"
+                  >
+                    <div>
+                      <div className="font-medium">
+                        {tx.type === "sent" ? "Sent" : "Received"}
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        {new Date(tx.timestamp).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div>{tx.amount}</div>
+                      <div className="text-xs text-gray-400">
+                        {tx.hash.slice(0, 6)}...{tx.hash.slice(-4)}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center text-gray-400 text-sm">
+                  No transactions found.
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "settings" && (
+            <div className="text-center text-gray-400">
+              Settings content here.
+            </div>
+          )}
         </div>
       </div>
 
@@ -194,11 +216,7 @@ const WalletModal: React.FC<WalletModalProps> = ({
             <Power className="w-4 h-4" />
             Disconnect
           </Button>
-          <Button
-            onClick={handleLogout}
-            variant="destructive"
-            className="flex-1"
-          >
+          <Button onClick={handleLogout} variant="destructive" className="flex-1">
             Logout
           </Button>
         </div>

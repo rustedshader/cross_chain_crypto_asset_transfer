@@ -7,10 +7,9 @@ export const LOCKING_CONTRACT_ABI = [
   "function processedTransfers(bytes32) external view returns (bool)",
   "function onERC721Received(address, address, uint256, bytes) external returns (bytes4)",
   "event NFTLocked(address indexed from, bytes32 indexed transferId, address nftContract, uint256 tokenId)",
-  "event NFTUnlocked(address indexed to, bytes32 indexed transferId, address nftContract, uint256 tokenId)"
+  "event NFTUnlocked(address indexed to, bytes32 indexed transferId, address nftContract, uint256 tokenId)",
 ];
 
-  
 export const MINTING_CONTRACT_ABI = [
   "constructor(string memory name, string memory symbol)",
   "function mintWrappedNFT(address _to, address _originalContract, uint256 _tokenId, bytes32 _transferId, string _tokenURI) external",
@@ -18,14 +17,19 @@ export const MINTING_CONTRACT_ABI = [
   "function processedTransfers(bytes32) external view returns (bool)",
   "function originalContracts(uint256) external view returns (address)",
   "event WrappedNFTMinted(address indexed to, bytes32 indexed transferId, address originalContract, uint256 tokenId)",
-  "event WrappedNFTBurned(address indexed from, bytes32 indexed transferId, address originalContract, uint256 tokenId)"
+  "event WrappedNFTBurned(address indexed from, bytes32 indexed transferId, address originalContract, uint256 tokenId)",
 ];
 
+export const NFT_CONTRACT_ABI = [
+  "function approve(address to, uint256 tokenId) external",
+  "function ownerOf(uint256 tokenId) external view returns (address)",
+  "function safeTransferFrom(address from, address to, uint256 tokenId) external",
+];
 
-
-  export const NFT_CONTRACT_ABI = [
-    "function approve(address to, uint256 tokenId) external",
-    "function ownerOf(uint256 tokenId) external view returns (address)",
-    "function safeTransferFrom(address from, address to, uint256 tokenId) external"
-  ];
-  
+export const ERC20_ABI = [
+  "function balanceOf(address owner) view returns (uint256)",
+  "function decimals() view returns (uint8)",
+  "function symbol() view returns (string)",
+  "function transfer(address to, uint amount) returns (bool)",
+  "event Transfer(address indexed from, address indexed to, uint amount)",
+];
