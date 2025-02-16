@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useSelector } from "react-redux";
+import { useAppDispatch, useAppSelector } from "@/redux/hooks";
+import {setRecentCompletedTx} from "@/redux/walletSlice";
 import { BrowserProvider, Contract, ethers } from "ethers";
 import {
   Card,
@@ -44,6 +46,8 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({
 
   const { insertTransactionRecord, updateTransactionRecord } =
     useTransactionOperations();
+
+const dispatch = useAppDispatch();
 
   useEffect(() => {
     if (window.ethereum) {
@@ -224,6 +228,7 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({
         };
 
         addTransaction(txDetails);
+        dispatch(setRecentCompletedTx(txDetails.mintHash));
         
         if (pendingRecord?.id) {
           await updateTransactionRecord(pendingRecord.id, {

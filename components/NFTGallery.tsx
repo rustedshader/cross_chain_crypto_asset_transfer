@@ -15,7 +15,7 @@ import { RefreshCw } from "lucide-react";
 
 export default function NFTGallery() {
   const dispatch = useAppDispatch();
-  const { address, chain, isConnected } = useAppSelector(
+  const { address, chain, isConnected,recentCompletedTx } = useAppSelector(
     (state: RootState) => state.wallet
   );
 
@@ -31,6 +31,7 @@ export default function NFTGallery() {
     setErrorMessage("");
     setIsLoading(true);
     setIsRefreshing(true);
+    console.log("recentCompletedTx",recentCompletedTx)
     try {
       const options = {
         method: "GET",
@@ -61,7 +62,7 @@ export default function NFTGallery() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [address, chain, isConnected]);
+  }, [address, chain, isConnected, recentCompletedTx]);
 
   useEffect(() => {
     fetchNFTs();

@@ -8,6 +8,7 @@ interface WalletState {
   balance: number; // or string, depending on how you fetch it
   chain:  keyof typeof CONSTANTS.CHAIN_CONFIG;   // e.g. "amoy", "ethereum", "polygon", etc.
   isConnected: boolean;
+  recentCompletedTx:string;
 }
 
 const initialState: WalletState = {
@@ -15,6 +16,7 @@ const initialState: WalletState = {
   balance: 0,
   chain: "AMOY",     // default chain
   isConnected: false,
+  recentCompletedTx:"",
 };
 
 export const walletSlice = createSlice({
@@ -37,8 +39,12 @@ export const walletSlice = createSlice({
       state.chain = "AMOY";
       state.isConnected = false;
     },
+
+    setRecentCompletedTx: (state, action: PayloadAction<string>) => {
+      state.recentCompletedTx = action.payload;
+    },
   },
 });
 
-export const { setWalletAddress, setChain, setBalance, resetWallet } = walletSlice.actions;
+export const { setWalletAddress, setChain, setBalance, resetWallet,setRecentCompletedTx } = walletSlice.actions;
 export default walletSlice.reducer;
