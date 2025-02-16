@@ -9,10 +9,10 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   try {
-    const { id, status, mintHash, lockHash, burnHash, unlockHash } = await request.json();
+    const { id, status, mintHash, lockHash, burnHash, unlockHash,transferId } = await request.json();
     const transaction = await prisma.transaction.update({
       where: { id },
-      data: { status, mintHash, lockHash, burnHash, unlockHash },
+      data: { status, mintHash, lockHash, burnHash, unlockHash, transferId },
     });
     return NextResponse.json({ transaction });
   } catch (error) {
