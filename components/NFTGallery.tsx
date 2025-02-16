@@ -138,7 +138,7 @@ export default function NFTGallery() {
             >
               {nfts.map((nft, index) => (
                 <motion.div
-                  key={nft.identifier}
+                  key={`${nft.collection}-${nft.identifier}`}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1 }}
@@ -180,7 +180,7 @@ export default function NFTGallery() {
           ) : (
             <div className="text-center py-12">
               <p className="text-gray-400">
-                No NFTs found for this address on the {chain} chain.
+                No NFTs found for this address on the {CONSTANTS.AVAILABLE_CHAINS.filter((x) => (x.chainId === chain))[0].name.toLocaleUpperCase()}  chain.
               </p>
             </div>
           )}

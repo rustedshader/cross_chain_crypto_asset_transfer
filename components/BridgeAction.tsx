@@ -60,7 +60,7 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({
         console.error("Error getting user:", error);
         return;
       }
-      setUser(user);
+      setUser(user.user);
     };
     getUser();
   }, [supabase]);
@@ -94,6 +94,19 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({
     []
   );
 
+  const merkleCheck = async (email: string): Promise<boolean> => {
+    try {
+      const response = await fetch(`/api/merkle_check?email=${email}`, {
+        method: "GET",
+      });
+      const data = await response.json();
+      return data.isVerified; // Assuming the API returns { isValid: boolean }
+    } catch (error) {
+      console.error("Error during Merkle check:", error);
+      return false;
+    }
+  };
+
   const verifyTransferState = async (
     lockingContract: Contract,
     mintingContract: Contract,
@@ -124,6 +137,7 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({
     }
 
     setIsLoading(true);
+    
     let transferId: string | null = null;
     
     const pendingRecord = await insertTransactionRecord({
@@ -133,11 +147,18 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({
       transferId: "",
       sourceChain: sourceChain,
       targetChain: selectedChain,
-      sourceContract: nft.contract,
+      sourceContract: CONSTANTS.CHAIN_CONFIG[sourceChain].source_contract,
       targetContract: CONSTANTS.CHAIN_CONFIG[selectedChain].destination_contract,
       status: "Pending",
       isActive: true
     });
+
+    const isAllowed = await merkleCheck(user.email);
+    if (!isAllowed) {
+      setErrorMessage("You are not authorized to mint tokens.");
+      setIsLoading(false);
+      return;
+    }
 
     try {
       transferId = ethers.keccak256(
@@ -313,6 +334,13 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({
       isActive: false
     });
 
+    const isAllowed = await merkleCheck(user.email);
+    if (!isAllowed) {
+      setErrorMessage("You are not authorized to mint tokens.");
+      setIsLoading(false);
+      return;
+    }
+
     try {
       // Burn wrapped NFT
       await switchToChain(sourceChain);
@@ -326,6 +354,8 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({
       const transferId = ethers.keccak256(
         ethers.toUtf8Bytes(`${userAddress}-${nft.identifier}-${Date.now()}`)
       );
+
+      console.log(wrappedInfo);
 
       toast.info("Burning wrapped NFT...");
       const burnTx = await mintingContract.burnWrappedNFT(
@@ -343,6 +373,12 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({
         LOCKING_CONTRACT_ABI,
         originalSigner
       );
+
+      if (!wrappedInfo.transferId) {
+        throw new Error("Transfer ID is missing");
+      }
+
+
 
       toast.info("Unlocking original NFT...");
       const unlockTx = await lockingContract.unlockNFT(
@@ -483,3 +519,7 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({
 };
 
 export default BridgeActions;
+
+function setErrorMessage(arg0: string) {
+  throw new Error("Function not implemented.");
+}

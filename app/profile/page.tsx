@@ -137,7 +137,7 @@ export default function ProfilePage() {
                     type="email"
                     value={profile.email}
                     disabled
-                    className="bg-gray-50"
+                    className=""
                   />
                 </div>
 
@@ -179,7 +179,7 @@ export default function ProfilePage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div className="flex items-center justify-between p-4  rounded-lg">
                     <div className="flex items-center gap-4">
                       <Key className="w-5 h-5 text-gray-500" />
                       <div>
@@ -213,7 +213,7 @@ export default function ProfilePage() {
                   <Button variant="destructive">Delete Account</Button>
                 </div>
 
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center justify-between p-4 rounded-lg">
                   <div>
                     <h3 className="font-medium">Logout</h3>
                     <p className="text-sm text-gray-500">

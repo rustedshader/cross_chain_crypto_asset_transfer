@@ -33,7 +33,7 @@ export async function GET(request: Request) {
     const hashedEmail = keccak256(Buffer.from(email));
     
     // Convert stored proof back to Buffer format
-    const proof = emailProof.proof.map(p => Buffer.from(p, 'hex'));
+    const proof = emailProof.proof.map((p: string) => Buffer.from(p, 'hex'));
 
     // Verify using just the root and stored proof
     const isVerified = MerkleTree.verify(
