@@ -323,10 +323,14 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({
         signer
       );
 
+      const transferId = ethers.keccak256(
+        ethers.toUtf8Bytes(`${userAddress}-${nft.identifier}-${Date.now()}`)
+      );
+
       toast.info("Burning wrapped NFT...");
       const burnTx = await mintingContract.burnWrappedNFT(
         nft.identifier,
-        wrappedInfo.transferId,
+        transferId,
         { gasLimit: 500000 }
       );
       await burnTx.wait();
