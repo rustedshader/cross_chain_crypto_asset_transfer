@@ -5,6 +5,7 @@ import { FaChevronDown, FaChevronUp, FaPlus, FaCopy } from "react-icons/fa";
 import { Button } from "@/components/ui/button";
 import { useAppDispatch } from "@/redux/hooks";
 import { setChain } from "@/redux/walletSlice";
+import { CONSTANTS } from "@/lib/constants";
 
 interface ChainInfo {
   name: string;
@@ -67,7 +68,7 @@ const WalletModal: React.FC<WalletModalProps> = ({
   // Handle chain selection
   const handleChainSelect = (chain: ChainInfo) => {
     setShowChainDropdown(false);
-    dispatch(setChain(chain.chainId));
+    dispatch(setChain(chain.chainId as keyof typeof CONSTANTS.CHAIN_CONFIG));
   };
 
   const copyAddressToClipboard = () => {

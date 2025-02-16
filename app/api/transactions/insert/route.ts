@@ -18,11 +18,19 @@ export async function POST(request: Request) {
       userId: user.id,
       type: data.type,
       tokenId: data.tokenId,
+      transferId: data.transferId || null,
+      sourceChain: data.sourceChain || null,
+      targetChain: data.targetChain || null,
+      sourceContract: data.sourceContract || null,
+      targetContract: data.targetContract || null,
       lockHash: data.lockHash || null,
       mintHash: data.mintHash || null,
       burnHash: data.burnHash || null,
       unlockHash: data.unlockHash || null,
       status: data.status,
+      isActive: data.isActive,
+
+
     };
 
     console.log('Creating transaction with data:', transactionData);

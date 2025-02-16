@@ -1,15 +1,22 @@
 export interface Transaction {
   id?: string;
-  tokenId?: string;
-  lockHash?: string;
-  mintHash?: string;
-  burnHash?: string;
-  unlockHash?: string;
+  userId: string;
+  tokenId: string;
+  transferId: string;              // Used to track the same transfer across chains
+  sourceChain: string;            // Chain where the original NFT exists
+  targetChain: string;            // Chain where wrapped NFT is/will be minted
+  sourceContract: string;         // Original NFT contract address
+  targetContract: string;         // Wrapped NFT contract address
+  lockHash?: string;             // Hash of the lock transaction
+  mintHash?: string;             // Hash of the mint transaction
+  burnHash?: string;             // Hash of the burn transaction
+  unlockHash?: string;           // Hash of the unlock transaction
   timestamp: number;
-  sender: string;
-  receiver: string;
-  type: string;
-  status: "Completed" | "Failed" | "Pending";
+  sender: string;                // Address initiating the transfer
+  receiver: string;              // Address receiving the NFT
+  type: string;//"LOCK_AND_MINT" | "BURN_AND_UNLOCK";  // Type of bridge operation
+  status:string; //"Pending" | "Completed" | "Failed";
+  isActive: boolean;             // Indicates if the NFT is currently bridged
 }
 
 export interface NFT {

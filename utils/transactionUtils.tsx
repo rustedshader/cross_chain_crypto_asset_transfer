@@ -6,6 +6,7 @@ export function useTransactionOperations() {
   const insertTransactionRecord = useCallback(
     async (transactionData: Partial<Transaction>) => {
       try {
+        console.log("transactionData", transactionData);
         const res = await fetch("/api/transactions/insert", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

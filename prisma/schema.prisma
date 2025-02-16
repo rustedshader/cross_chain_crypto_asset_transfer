@@ -9,18 +9,26 @@ datasource db {
 }
 
 model Transaction {
-  id         String   @id @default(uuid())
-  userId     String   // This will reference auth.users.id
-  type       String
-  tokenId    String
-  lockHash   String?
-  mintHash   String?
-  burnHash   String?
-  unlockHash String?
-  timestamp  DateTime @default(now())
-  status     String
+  id              String   @id @default(uuid())
+  userId          String
+  type            String   // "LOCK_AND_MINT" or "BURN_AND_UNLOCK"
+  tokenId         String?
+  transferId      String?   // Store the transferId used in the contracts
+  sourceChain     String?   // Original chain where NFT was locked
+  targetChain     String?  // Chain where wrapped NFT exists
+  sourceContract  String?   // Original NFT contract address
+  targetContract  String?   // Wrapped NFT contract address
+  lockHash        String?
+  mintHash        String?
+  burnHash        String?
+  unlockHash      String?
+  timestamp       DateTime @default(now())
+  status          String
+  isActive        Boolean  @default(true)  // Track if NFT is currently bridged
 
   @@index([userId])
+  @@index([transferId])
+  @@index([tokenId, isActive])
 }
 
 model WhiteListedMerkle {

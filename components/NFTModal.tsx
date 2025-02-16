@@ -1,12 +1,12 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { CONSTANTS } from "@/lib/constants";
 import { NFT, Transaction } from "@/types";
 import NFTDetails from "./NFTDetails";
 import BridgeActions from "./BridgeAction";
-// import TransactionHistory from "./TransactionHistory";
 import { toast } from 'react-toastify';
 import { motion } from "framer-motion";
 import { X } from "lucide-react";
+import { getWrappedNFTInfo, WrappedNFTInfo } from "@/utils/nftUtils";
 
 interface NFTModalProps {
   nft: NFT;
@@ -21,20 +21,41 @@ const NFTModal: React.FC<NFTModalProps> = ({
   sourceChain,
   onTransferSuccess 
 }) => {
-  // const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [wrappedInfo, setWrappedInfo] = useState<WrappedNFTInfo | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   
+  useEffect(() => {
+    const loadWrappedInfo = async () => {
+      setIsLoading(true);
+      try {
+        const info = await getWrappedNFTInfo(nft, sourceChain);
+        setWrappedInfo(info);
+      } catch (error) {
+        console.error("Error loading wrapped NFT info:", error);
+      }
+      setIsLoading(false);
+    };
+
+    loadWrappedInfo();
+  }, [nft, sourceChain]);
+
   const addTransaction = (tx: Transaction) => {
-    // setTransactions((prev) => [...prev, tx]);
     if (tx.status === "Completed") {
-      toast.success("NFT successfully transferred to the new chain!", {
-        position: "top-right",
-        autoClose: 5000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-      });
+      toast.success(
+        wrappedInfo?.isWrapped 
+          ? "NFT successfully returned to original chain!" 
+          : "NFT successfully bridged to new chain!", 
+        {
+          position: "top-right",
+          autoClose: 5000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          progress: undefined,
+        }
+      );
+      
       // Close modal and refresh gallery after a short delay
       setTimeout(() => {
         onClose();
@@ -69,16 +90,21 @@ const NFTModal: React.FC<NFTModalProps> = ({
 
         <div className="space-y-6">
           {/* NFT Details */}
-          <NFTDetails sourceChain={sourceChain} nft={nft} />
-
-          {/* Cross-Chain Bridge Actions */}
-          <BridgeActions
-            sourceChain={sourceChain}
-            nft={nft}
-            addTransaction={addTransaction}
+          <NFTDetails 
+            sourceChain={sourceChain} 
+            nft={nft} 
+            wrappedInfo={wrappedInfo}
           />
 
-         
+          {/* Cross-Chain Bridge Actions */}
+          {!isLoading && (
+            <BridgeActions
+              sourceChain={sourceChain}
+              nft={nft}
+              wrappedInfo={wrappedInfo || undefined}
+              addTransaction={addTransaction}
+            />
+          )}
         </div>
       </motion.div>
     </motion.div>

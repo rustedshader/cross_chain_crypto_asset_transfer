@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRightLeft, Lock } from "lucide-react";
+import { ArrowRightLeft, Lock, Unlock } from "lucide-react";
 import { toast } from 'react-toastify';
 import { decodeError } from "@/lib/utils";
 import { CONSTANTS } from "@/lib/constants";
@@ -23,15 +23,20 @@ import {
 } from "@/lib/contracts";
 import { ContractError, NFT, Transaction, RootState } from "@/types";
 import { useTransactionOperations } from "@/utils/transactionUtils";
+import { WrappedNFTInfo } from "@/utils/nftUtils";
+import { createClient } from "@/utils/supabase/client";
+import { isAction } from "redux";
 
 interface BridgeActionsProps {
   nft: NFT;
+  wrappedInfo?: WrappedNFTInfo;
   addTransaction: (tx: Transaction) => void;
   sourceChain: keyof typeof CONSTANTS.CHAIN_CONFIG;
 }
 
 const BridgeActions: React.FC<BridgeActionsProps> = ({
   nft,
+  wrappedInfo,
   addTransaction,
   sourceChain,
 }) => {
@@ -40,14 +45,25 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({
   );
 
   const [provider, setProvider] = useState<BrowserProvider | null>(null);
-  const [selectedChain, setSelectedChain] =
-    useState<keyof typeof CONSTANTS.CHAIN_CONFIG>("BASE_SEPOLIA");
+  const [selectedChain, setSelectedChain] = useState<keyof typeof CONSTANTS.CHAIN_CONFIG>("BASE_SEPOLIA");
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [user, setUser] = useState<any | null>(null);
 
-  const { insertTransactionRecord, updateTransactionRecord } =
-    useTransactionOperations();
-
-const dispatch = useAppDispatch();
+  const { insertTransactionRecord, updateTransactionRecord } = useTransactionOperations();
+  const supabase = createClient();
+  const dispatch = useAppDispatch();
+  //set user using supabase
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: user, error } = await supabase.auth.getUser();
+      if (error) {
+        console.error("Error getting user:", error);
+        return;
+      }
+      setUser(user);
+    };
+    getUser();
+  }, [supabase]);
 
   useEffect(() => {
     if (window.ethereum) {
@@ -83,69 +99,68 @@ const dispatch = useAppDispatch();
     mintingContract: Contract,
     transferId: string
   ) => {
-    return true;
-    // Check if transfer is already processed on either chain
-    // const [isProcessedSource, isProcessedDest] = await Promise.all([
-    //   lockingContract.processedTransfers(transferId),
-    //   mintingContract.processedTransfers(transferId)
-    // ]);
-    const isProcessedSource = await lockingContract.processedTransfers(transferId);
-    const isProcessedDest = await mintingContract.processedTransfers(transferId);
+    try {
+      return true;
+      // Check source chain
+      const sourceProcessed = await lockingContract.checkProcessedTransfer(transferId);
+      
+      // Check destination chain
+      const destProcessed = await mintingContract.processedTransfers(transferId);
 
-    if (isProcessedSource || isProcessedDest) {
-      throw new Error("Transfer ID already used");
+      if (sourceProcessed || destProcessed) {
+        throw new Error("Transfer ID already processed");
+      }
+      return true;
+    } catch (error) {
+      console.error('Error in verifyTransferState:', error);
+      throw error;
     }
-  };
-
-  const unlockNFT = async (
-    lockingContract: Contract,
-    transferId: string
-  ) => {
-    const unlockTx = await lockingContract.unlockNFT(transferId, {
-      gasLimit: 500000
-    });
-    await unlockTx.wait();
-    toast.info("NFT unlocked successfully", { position: "top-right" });
   };
 
   const lockAndWrap = useCallback(async () => {
     if (!nft.identifier || !provider || !nft.contract || !nft.opensea_url) {
-      toast.error("Invalid NFT data or provider not available", {
-        position: "top-right"
-      });
+      toast.error("Invalid NFT data or provider not available");
       return;
     }
 
     setIsLoading(true);
-    let lockingContract: Contract | null = null;
     let transferId: string | null = null;
     
     const pendingRecord = await insertTransactionRecord({
-      type: "Lock on Chain A and Wrap on Chain B",
+      userId: user?.id,
+      type: "LOCK_AND_MINT",
       tokenId: nft.identifier,
+      transferId: "",
+      sourceChain: sourceChain,
+      targetChain: selectedChain,
+      sourceContract: nft.contract,
+      targetContract: CONSTANTS.CHAIN_CONFIG[selectedChain].destination_contract,
       status: "Pending",
-      sender: userAddress,
-      receiver: userAddress,
-      timestamp: Date.now(),
+      isActive: true
     });
 
     try {
-      // Generate transfer ID first
       transferId = ethers.keccak256(
         ethers.toUtf8Bytes(`${userAddress}-${nft.identifier}-${Date.now()}`)
       );
 
-      // Switch to source chain and get contracts
+      // Update pending record with transferId
+      if (pendingRecord?.id) {
+        await updateTransactionRecord(pendingRecord.id, {
+          transferId: transferId
+        });
+      }
+
+      // Initialize contracts and verify states
       await switchToChain(sourceChain);
       const sourceSigner = await provider.getSigner();
       
-      lockingContract = new Contract(
+      const lockingContract = new Contract(
         CONSTANTS.CHAIN_CONFIG[sourceChain].source_contract,
         LOCKING_CONTRACT_ABI,
         sourceSigner
       );
 
-      // Switch to destination chain to verify state
       await switchToChain(selectedChain);
       const destSigner = await provider.getSigner();
       const mintingContract = new Contract(
@@ -154,10 +169,10 @@ const dispatch = useAppDispatch();
         destSigner
       );
 
-      // Verify transfer state on both chains
+      // Verify transfer state
       await verifyTransferState(lockingContract, mintingContract, transferId);
 
-      // Switch back to source chain for locking
+      // Lock NFT
       await switchToChain(sourceChain);
       const nftContract = new Contract(nft.contract, NFT_CONTRACT_ABI, sourceSigner);
 
@@ -168,7 +183,7 @@ const dispatch = useAppDispatch();
       }
 
       // Approve transfer
-      toast.info("Approving NFT transfer...", { position: "top-right" });
+      toast.info("Approving NFT transfer...");
       const approveTx = await nftContract.approve(
         CONSTANTS.CHAIN_CONFIG[sourceChain].source_contract,
         nft.identifier,
@@ -177,7 +192,7 @@ const dispatch = useAppDispatch();
       await approveTx.wait();
 
       // Lock NFT
-      toast.info("Locking NFT on source chain...", { position: "top-right" });
+      toast.info("Locking NFT on source chain...");
       const lockTx = await lockingContract.lockNFT(
         nft.contract,
         nft.identifier,
@@ -186,18 +201,17 @@ const dispatch = useAppDispatch();
       );
       await lockTx.wait();
 
-      // Verify lock was successful
-      const transfer = await lockingContract.transfers(transferId);
-      if (!transfer.processed) {
-        throw new Error("Lock transaction failed");
-      }
+      // // Verify lock success
+      // const isLocked = await lockingContract.checkProcessedTransfer(transferId);
+      // if (!isLocked) {
+      //   throw new Error("Lock transaction failed verification");
+      // }
 
-      // Switch to destination chain
-      toast.info("Switching to destination chain...", { position: "top-right" });
+      // Mint wrapped NFT
+      toast.info("Switching to destination chain...");
       await switchToChain(selectedChain);
       
-      // Mint wrapped NFT
-      toast.info("Minting wrapped NFT...", { position: "top-right" });
+      toast.info("Minting wrapped NFT...");
       try {
         const mintTx = await mintingContract.mintWrappedNFT(
           userAddress,
@@ -209,22 +223,23 @@ const dispatch = useAppDispatch();
         );
         await mintTx.wait();
 
-        // Verify mint was successful
-        const isProcessedDest = await mintingContract.processedTransfers(transferId);
-        if (!isProcessedDest) {
-          throw new Error("Mint verification failed");
-        }
-
         // Record successful transaction
         const txDetails = {
+          userId: user?.id,
+          transferId: transferId,
+          sourceChain: sourceChain,
+          targetChain: selectedChain,
+          sourceContract: nft.contract,
+          targetContract: mintTx.hash,
           lockHash: lockTx.hash,
           mintHash: mintTx.hash,
           timestamp: Date.now(),
           sender: userAddress,
           receiver: userAddress,
           tokenId: nft.identifier,
-          type: "Lock on Chain A and Wrap on Chain B",
+          type: "LOCK_AND_MINT",
           status: "Completed",
+          isActive: true,
         };
 
         addTransaction(txDetails);
@@ -238,21 +253,27 @@ const dispatch = useAppDispatch();
           });
         }
 
-        toast.success("NFT successfully bridged!", { position: "top-right" });
+        toast.success("NFT successfully bridged!");
       } catch (mintError) {
         // If minting fails, unlock the NFT
-        toast.error("Minting failed, initiating rollback...", { position: "top-right" });
+        toast.error("Minting failed, unlocking NFT...");
         await switchToChain(sourceChain);
-        await unlockNFT(lockingContract, transferId);
+        const unlockTx = await lockingContract.unlockNFT(transferId, {
+          gasLimit: 500000
+        });
+        await unlockTx.wait();
         throw new Error("Minting failed, NFT has been unlocked");
       }
 
     } catch (error) {
       console.error("Error:", error);
       const errorMessage = decodeError(error as ContractError);
-      toast.error(errorMessage, { position: "top-right" });
+      toast.error(errorMessage);
       if (pendingRecord?.id) {
-        await updateTransactionRecord(pendingRecord.id, { status: "Failed" });
+        await updateTransactionRecord(pendingRecord.id, { 
+          status: "Failed",
+          isActive: false
+        });
       }
     } finally {
       setIsLoading(false);
@@ -267,6 +288,126 @@ const dispatch = useAppDispatch();
     addTransaction,
     selectedChain,
     sourceChain,
+    user,
+    dispatch
+  ]);
+
+  const burnAndUnlock = useCallback(async () => {
+    if (!wrappedInfo || !provider || !nft.identifier) {
+      toast.error("Invalid NFT data or not a wrapped token");
+      return;
+    }
+
+    setIsLoading(true);
+    const pendingRecord = await insertTransactionRecord({
+      userId: user?.id,
+      type: "BURN_AND_UNLOCK",
+      tokenId: nft.identifier,
+      transferId: wrappedInfo.transferId!,
+      sourceChain: wrappedInfo.originalChain!,
+      targetChain: sourceChain,
+      sourceContract: wrappedInfo.originalContract!,
+      targetContract: nft.contract,
+      status: "Pending",
+      isActive: false
+    });
+
+    try {
+      // Burn wrapped NFT
+      await switchToChain(sourceChain);
+      const signer = await provider.getSigner();
+      const mintingContract = new Contract(
+        nft.contract,
+        MINTING_CONTRACT_ABI,
+        signer
+      );
+
+      toast.info("Burning wrapped NFT...");
+      const burnTx = await mintingContract.burnWrappedNFT(
+        nft.identifier,
+        wrappedInfo.transferId,
+        { gasLimit: 500000 }
+      );
+      await burnTx.wait();
+
+      // Unlock original NFT
+      await switchToChain(wrappedInfo.originalChain as keyof typeof CONSTANTS.CHAIN_CONFIG);
+      const originalSigner = await provider.getSigner();
+      const lockingContract = new Contract(
+        wrappedInfo.originalContract!,
+        LOCKING_CONTRACT_ABI,
+        originalSigner
+      );
+
+      toast.info("Unlocking original NFT...");
+      const unlockTx = await lockingContract.unlockNFT(
+        wrappedInfo.transferId,
+        { gasLimit: 500000 }
+      );
+      await unlockTx.wait();
+
+      // Update transaction records
+      const txDetails = {
+        userId: user?.id,
+        transferId: wrappedInfo.transferId!,
+        sourceChain: wrappedInfo.originalChain!,
+        targetChain: sourceChain,
+        sourceContract: wrappedInfo.originalContract!,
+        targetContract: nft.contract,
+
+        burnHash: burnTx.hash,
+        unlockHash: unlockTx.hash,
+        timestamp: Date.now(),
+        sender: userAddress,
+        receiver: userAddress,
+        tokenId: nft.identifier,
+        type: "BURN_AND_UNLOCK",
+        status: "Completed",
+        isActive: false
+      };
+
+      addTransaction(txDetails);
+
+      if (pendingRecord?.id) {
+        await updateTransactionRecord(pendingRecord.id, {
+          burnHash: burnTx.hash,
+          unlockHash: unlockTx.hash,
+          status: "Completed"
+        });
+      }
+
+      // Update the original bridge transaction
+      if (wrappedInfo.transaction?.id) {
+        await updateTransactionRecord(wrappedInfo.transaction.id, {
+          isActive: false
+        });
+      }
+
+      toast.success("NFT successfully returned to original chain!");
+    } catch (error) {
+      console.error("Error:", error);
+      const errorMessage = decodeError(error as ContractError);
+      toast.error(errorMessage);
+      if (pendingRecord?.id) {
+        await updateTransactionRecord(pendingRecord.id, { 
+          status: "Failed",
+          isActive: false
+        });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [
+    nft,
+    wrappedInfo,
+    provider,
+    userAddress,
+    sourceChain,
+    insertTransactionRecord,
+    updateTransactionRecord,
+    switchToChain,
+    addTransaction,
+    user,
   ]);
 
   return (
@@ -277,40 +418,60 @@ const dispatch = useAppDispatch();
           Cross-Chain Bridge
         </CardTitle>
         <CardDescription>
-          Transfer this NFT to a different chain
+          {wrappedInfo?.isWrapped 
+            ? "Return this NFT to its original chain"
+            : "Transfer this NFT to a different chain"}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex flex-col md:flex-row items-center gap-4">
-          <select
-            value={selectedChain}
-            onChange={(e) => setSelectedChain(e.target.value as keyof typeof CONSTANTS.CHAIN_CONFIG)}
-            className="p-2 rounded-md bg-gray-700 text-white border border-gray-600 focus:ring-2 focus:ring-blue-500"
-          >
-            {CONSTANTS.AVAILABLE_CHAINS.map(
-              (chain) =>
-                chain.chainId !== sourceChain && (
-                  <option key={chain.chainId} value={chain.chainId}>
-                    {chain.name}
-                  </option>
-                )
-            )}
-          </select>
+        {wrappedInfo?.isWrapped ? (
           <Button 
-            onClick={lockAndWrap} 
+            onClick={burnAndUnlock} 
             disabled={isLoading} 
-            className="h-12 w-full md:w-auto"
+            variant="destructive"
+            className="w-full"
           >
             {isLoading ? (
               <Skeleton className="h-4 w-32" />
             ) : (
               <>
-                <Lock className="mr-2 h-4 w-4" />
-                Transfer NFT
+                <Unlock className="mr-2 h-4 w-4" />
+                Return to Original Chain ({wrappedInfo.originalChain})
               </>
             )}
           </Button>
-        </div>
+        ) : (
+          <div className="flex flex-col md:flex-row items-center gap-4">
+            <select
+              value={selectedChain}
+              onChange={(e) => setSelectedChain(e.target.value as keyof typeof CONSTANTS.CHAIN_CONFIG)}
+              className="p-2 rounded-md bg-gray-700 text-white border border-gray-600 focus:ring-2 focus:ring-blue-500 w-full md:w-auto"
+            >
+              {CONSTANTS.AVAILABLE_CHAINS.map(
+                (chain) =>
+                  chain.chainId !== sourceChain && (
+                    <option key={chain.chainId} value={chain.chainId}>
+                      {chain.name}
+                    </option>
+                  )
+              )}
+            </select>
+            <Button 
+              onClick={lockAndWrap} 
+              disabled={isLoading} 
+              className="w-full md:w-auto"
+            >
+              {isLoading ? (
+                <Skeleton className="h-4 w-32" />
+              ) : (
+                <>
+                  <Lock className="mr-2 h-4 w-4" />
+                  Bridge NFT
+                </>
+              )}
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

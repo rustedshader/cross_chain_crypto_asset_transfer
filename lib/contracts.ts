@@ -1,3 +1,5 @@
+//contract.ts
+
 export const LOCKING_CONTRACT_ABI = [
   "function lockNFT(address _nftContract, uint256 _tokenId, bytes32 _transferId) external",
   "function unlockNFT(bytes32 _transferId) external",
