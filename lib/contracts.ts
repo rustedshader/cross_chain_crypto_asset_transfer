@@ -10,10 +10,15 @@ export const LOCKING_CONTRACT_ABI = [
 
   
 export const MINTING_CONTRACT_ABI = [
+  "constructor(string memory name, string memory symbol)",
   "function mintWrappedNFT(address _to, address _originalContract, uint256 _tokenId, bytes32 _transferId, string _tokenURI) external",
+  "function burnWrappedNFT(uint256 _tokenId, bytes32 _transferId) external",
   "function processedTransfers(bytes32) external view returns (bool)",
-  "event WrappedNFTMinted(address indexed to, bytes32 indexed transferId, address originalContract, uint256 tokenId)"
+  "function originalContracts(uint256) external view returns (address)",
+  "event WrappedNFTMinted(address indexed to, bytes32 indexed transferId, address originalContract, uint256 tokenId)",
+  "event WrappedNFTBurned(address indexed from, bytes32 indexed transferId, address originalContract, uint256 tokenId)"
 ];
+
 
 
   export const NFT_CONTRACT_ABI = [
