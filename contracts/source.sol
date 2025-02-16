@@ -93,6 +93,16 @@ contract SourceChainGateway is IERC721Receiver, ReentrancyGuard, Ownable {
         );
     }
 
+    //check process transfer 
+    //return true if transfer is processed
+    //if it doesnot exists then return false
+    function checkProcessedTransfer(bytes32 _transferId) external view returns (bool) {
+        if(processedTransfers[_transferId]){
+            return processedTransfers[_transferId];
+        }
+        return false;
+    }
+
     // Required for IERC721Receiver
     function onERC721Received(
         address,

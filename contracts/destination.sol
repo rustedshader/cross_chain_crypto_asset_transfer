@@ -65,4 +65,14 @@ contract DestinationChainGateway is ERC721URIStorage, ReentrancyGuard, Ownable {
 
         emit WrappedNFTBurned(msg.sender, _transferId, originalContract, _tokenId);
     }
+
+    //check process transfer 
+    //return true if transfer is processed
+    //if it doesnot exists then return false
+    function checkProcessedTransfer(bytes32 _transferId) external view returns (bool) {
+        if(processedTransfers[_transferId]){
+            return processedTransfers[_transferId];
+        }
+        return false;
+    }
 }
