@@ -81,7 +81,7 @@ export default function NFTGallery() {
               <select
                 id="chain-select"
                 value={chain}
-                onChange={(e) => dispatch(setChain(e.target.value))}
+                onChange={(e) => dispatch(setChain(e.target.value as keyof typeof CONSTANTS.CHAIN_CONFIG))}
                 className="border border-gray-300 rounded-md p-2 text-sm bg-gray-700 text-white"
               >
               {CONSTANTS.AVAILABLE_CHAINS.map((chain) => (

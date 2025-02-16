@@ -24,9 +24,9 @@ export const CONSTANTS = {
     OP_SEPOLIA_EXPLORER_URL: "https://sepolia-optimism.etherscan.io/",
 
     AVAILABLE_CHAINS: [
-      { name: "Amoy", chainId: "amoy" },
-      { name: "Base Sepolia", chainId: "base_sepolia" },
-      { name: "OP Sepolia", chainId: "op_sepolia" },
+      { name: "Amoy", chainId: "AMOY" },
+      { name: "Base Sepolia", chainId: "BASE_SEPOLIA" },
+      { name: "OP Sepolia", chainId: "OP_SEPOLIA" },
     ],
 
 

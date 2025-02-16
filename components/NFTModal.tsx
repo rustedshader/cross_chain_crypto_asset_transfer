@@ -158,7 +158,7 @@ const NFTDetails: React.FC<NFTDetailsProps> = ({ nft , sourceChain }) => {
 interface BridgeActionsProps {
   nft: NFT;
   addTransaction: (tx: Transaction) => void;
-  sourceChain: string;
+  sourceChain:  keyof typeof CONSTANTS.CHAIN_CONFIG;
 }
 
 const BridgeActions: React.FC<BridgeActionsProps> = ({ nft, addTransaction , sourceChain}) => {
@@ -169,8 +169,8 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({ nft, addTransaction , sou
 
   const [provider, setProvider] = useState<BrowserProvider | null>(null);
   const [currentChain, setCurrentChain] = useState<string>("");
-  const [selectedChain, setSelectedChain] = useState<"AMOY" | "CARDONA">(
-    "CARDONA"
+  const [selectedChain, setSelectedChain] = useState< keyof typeof CONSTANTS.CHAIN_CONFIG>(
+    "BASE_SEPOLIA"
   );
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -208,8 +208,8 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({ nft, addTransaction , sou
 
   // Helper: Switch chain using wallet_switchEthereumChain (and add if needed)
   const switchToChain = useCallback(
-    async (chainType: string) => {
-      const config = CONSTANTS.CHAIN_CONFIG[chainType.toUpperCase()];
+    async (chainType: keyof typeof CONSTANTS.CHAIN_CONFIG) => {
+      const config = CONSTANTS.CHAIN_CONFIG[chainType];
       try {
         await window.ethereum.request({
           method: "wallet_switchEthereumChain",
@@ -336,14 +336,14 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({ nft, addTransaction , sou
       }
       
       // Approve the SourceChainGateway (locking contract) to transfer your NFT
-      const approveTx = await nftContract.approve(CONSTANTS.LOCKING_CONTRACT, nft.identifier, {
+      const approveTx = await nftContract.approve(CONSTANTS.CHAIN_CONFIG[sourceChain].source_contract, nft.identifier, {
         gasLimit: 500000,
       });
       await approveTx.wait();
       
       // Create an instance of the SourceChainGateway contract
       const lockingContract = new Contract(
-        CONSTANTS.LOCKING_CONTRACT,
+        CONSTANTS.CHAIN_CONFIG[sourceChain].source_contract,
         LOCKING_CONTRACT_ABI,
         signer
       );
@@ -365,13 +365,13 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({ nft, addTransaction , sou
       // --- PART 2: Mint Wrapped NFT on CARDONA ---
       
       // Switch network to CARDONA where the DestinationChainGateway is deployed
-      await switchToChain("CARDONA");
+      await switchToChain(selectedChain);
       // Re-obtain the signer on the new network
       const signerCardona = await provider.getSigner();
       
       // Create an instance of the DestinationChainGateway contract
       const destinationContract = new Contract(
-        CONSTANTS.MINTING_CONTRACT,
+        CONSTANTS.CHAIN_CONFIG[selectedChain].destination_contract,
         MINTING_CONTRACT_ABI,
         signerCardona
       );
@@ -433,13 +433,9 @@ const BridgeActions: React.FC<BridgeActionsProps> = ({ nft, addTransaction , sou
 
   // Handler: call mintToken or lockAndMint based on dropdown selection
   const handleBridge = async () => {
-    if (selectedChain === "AMOY") {
-      console.log(nft);
-      await lockAndWrap();
-    } else if (selectedChain === "CARDONA") {
-      console.log(nft);
-      await lockAndWrap();
-    }
+    console.log("sourceChain", sourceChain);
+    console.log("selectedChain", selectedChain);
+    await lockAndWrap();
   };
 
   return (
@@ -601,7 +597,7 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({
 interface NFTModalProps {
   nft: NFT;
   onClose: () => void;
-  sourceChain: string;
+  sourceChain:  keyof typeof CONSTANTS.CHAIN_CONFIG;
 }
 
 const NFTModal: React.FC<NFTModalProps> = ({ nft, onClose, sourceChain }) => {
