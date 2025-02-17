@@ -16,6 +16,7 @@ import { getBatchWrappedNFTInfo } from "@/utils/nftUtils";
 import { BrowserProvider, formatUnits } from "ethers";
 import { Badge } from "@/components/ui/badge";
 import WalletSelector from "./WalletSelector";
+import NFTPlaceholder from "./NFTPlaceholder";
 
 const WalletNotConnected = ({
   handleConnectWalletClick,
@@ -274,11 +275,7 @@ export default function NFTGallery() {
                           <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-opacity duration-200 rounded-md" />
                         </div>
                       ) : (
-                        <div className="w-full h-40 bg-gray-700 flex items-center justify-center rounded-md">
-                          <span className="text-gray-500 text-sm">
-                            No Image
-                          </span>
-                        </div>
+                        <NFTPlaceholder />
                       )}
                       <p className="text-xs mt-2 text-gray-400 truncate">
                         Collection: {nft.collection}

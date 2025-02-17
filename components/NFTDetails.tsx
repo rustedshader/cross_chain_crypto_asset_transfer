@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { NFT } from "@/types";
 import { WrappedNFTInfo } from "@/utils/nftUtils";
 import { ExternalLink } from "lucide-react";
-
+import NFTPlaceholder from "./NFTPlaceholder";
 interface NFTDetailsProps {
   nft: NFT;
   sourceChain: string;
@@ -57,9 +57,7 @@ const NFTDetails: React.FC<NFTDetailsProps> = ({ nft, sourceChain, wrappedInfo }
               priority
             />
           ) : (
-            <div className="w-full h-full bg-gray-700/50 flex items-center justify-center rounded-lg border border-gray-600/50">
-              <span className="text-gray-400">No Image Available</span>
-            </div>
+           <NFTPlaceholder variant="detail"  />
           )}
         </motion.div>
 

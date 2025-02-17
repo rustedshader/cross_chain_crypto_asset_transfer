@@ -138,6 +138,13 @@ export default function NavBar() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+     // Clear any app state
+      dispatch(setWalletAddress(''));
+      dispatch(setBalance(0));
+      
+      // Force a hard reload to clear all states
+      window.location.href = '/auth/login';
+
   };
 
   return (
