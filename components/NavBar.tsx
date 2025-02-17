@@ -142,111 +142,117 @@ export default function NavBar() {
 
   return (
     <>
-    {/* Add a spacer div to push content down */}
-    <div className="h-16" />
-    
-    {/* Navbar */}
-    <div className="fixed top-0 left-0 right-0 z-50">
-      <div className="backdrop-blur-md bg-gray-900/80 border-b border-gray-800/50 shadow-lg">
-        <nav className="px-4">
-          {/* Rest of the navbar content remains the same */}
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-8">
-              <Link href="/" className="flex-shrink-0">
-                <Logo />
-              </Link>
-              
-              {session && (
-                <div className="hidden md:flex items-center gap-1">
-                  <Link 
-                    href="/" 
-                    className="px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800/50 transition-all flex items-center gap-2"
-                  >
-                    <Home className="w-4 h-4" />
-                    Home
-                  </Link>
-                  <Link 
-                    href="/profile" 
-                    className="px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800/50 transition-all flex items-center gap-2"
-                  >
-                    <User className="w-4 h-4" />
-                    Profile
-                  </Link>
-                  <Link 
-                    href="/transactions" 
-                    className="px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800/50 transition-all flex items-center gap-2"
-                  >
-                    <History className="w-4 h-4" />
-                    Transactions
-                  </Link>
-                </div>
-              )}
-            </div>
+      <div className="h-16" />
+      <div className="fixed top-0 left-0 right-0 z-50">
+        <div className="backdrop-blur-md bg-gray-900/80 border-b border-gray-800/50 shadow-lg">
+          <nav className="px-4">
+            <div className="flex items-center justify-between h-16">
+              {/* Left side - Logo and Navigation */}
+              <div className="flex items-center gap-8">
+                <Link href="/" className="flex-shrink-0">
+                  <Logo />
+                </Link>
 
-            <div className="flex items-center gap-4">
-              {session ? (
-                !isConnected ? (
-                  <Button
-                    onClick={handleConnectWalletClick}
-                    className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium py-2 px-4 rounded-lg flex items-center gap-2 transition-all transform hover:scale-105"
-                  >
-                    <Wallet className="w-4 h-4" />
-                    Connect Wallet
-                  </Button>
-                ) : (
-                  <div className="relative inline-block">
-                    <Button
-                      onClick={() => setIsWalletOpen(!isWalletOpen)}
-                      className="bg-gray-800 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg flex items-center gap-2 transition-all border border-gray-700"
+                {session && (
+                  <div className="hidden md:flex items-center gap-1">
+                    <Link
+                      href="/"
+                      className="px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800/50 transition-all flex items-center gap-2"
                     >
-                      <Wallet className="w-4 h-4" />
-                      Wallet
-                    </Button>
-                    <WalletModal
-                      isOpen={isWalletOpen}
-                      onClose={() => setIsWalletOpen(false)}
-                      address={address}
-                      usdBalance={balance.toString()}
-                      tokens={tokenBalance}
-                      transactions={transactionHistory}
-                      chainList={chainList}
-                      currentChain={chain}
-                      handleLogout={handleLogout}
-                    />
+                      <Home className="w-4 h-4" />
+                      Home
+                    </Link>
+                    <Link
+                      href="/profile"
+                      className="px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800/50 transition-all flex items-center gap-2"
+                    >
+                      <User className="w-4 h-4" />
+                      Profile
+                    </Link>
+                    <Link
+                      href="/transactions"
+                      className="px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800/50 transition-all flex items-center gap-2"
+                    >
+                      <History className="w-4 h-4" />
+                      Transactions
+                    </Link>
                   </div>
-                )
-              ) : (
-                <div className="flex items-center gap-3">
-                  <Link href="/auth/login">
-                    <Button 
-                      variant="ghost" 
-                      className="text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-lg transition-all"
-                    >
-                      Login
-                    </Button>
-                  </Link>
-                  <Link href="/auth/register">
-                    <Button 
-                      className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium rounded-lg transition-all transform hover:scale-105"
-                    >
-                      Register
-                    </Button>
-                  </Link>
-                </div>
-              )}
-            </div>
-          </div>
-        </nav>
-      </div>
+                )}
+              </div>
 
-      {showWalletOptions && (
-        <WalletSelector
-          isOpen={showWalletOptions}
-          onClose={() => setShowWalletOptions(false)}
-          onSelect={handleWalletOptionSelect}
-        />
-      )}
-    </div>
-  </>
+              {/* Right side - Auth Buttons */}
+              <div className="flex items-center gap-4">
+                {session ? (
+                  <div className="flex items-center gap-3">
+                    {!isConnected ? (
+                      <Button
+                        onClick={handleConnectWalletClick}
+                        className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium py-2 px-4 rounded-lg flex items-center gap-2 transition-all transform hover:scale-105"
+                      >
+                        <Wallet className="w-4 h-4" />
+                        Connect Wallet
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={() => setIsWalletOpen(!isWalletOpen)}
+                        className="bg-gray-800 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg flex items-center gap-2 transition-all border border-gray-700"
+                      >
+                        <Wallet className="w-4 h-4" />
+                        Wallet
+                      </Button>
+                    )}
+                    <Button
+                      onClick={handleLogout}
+                      variant="destructive"
+                      className="rounded-lg"
+                    >
+                      Logout
+                    </Button>
+
+                    {isConnected && (
+                      <WalletModal
+                        isOpen={isWalletOpen}
+                        onClose={() => setIsWalletOpen(false)}
+                        address={address}
+                        usdBalance={balance.toString()}
+                        tokens={tokenBalance}
+                        transactions={transactionHistory}
+                        chainList={chainList}
+                        currentChain={chain}
+                        handleLogout={handleLogout}
+                      />
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <Link href="/auth/login">
+                      <Button
+                        variant="ghost"
+                        className="text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-lg transition-all"
+                      >
+                        Login
+                      </Button>
+                    </Link>
+                    <Link href="/auth/register">
+                      <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium rounded-lg transition-all transform hover:scale-105">
+                        Register
+                      </Button>
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </div>
+          </nav>
+        </div>
+
+        {showWalletOptions && (
+          <WalletSelector
+            isOpen={showWalletOptions}
+            onClose={() => setShowWalletOptions(false)}
+            onSelect={handleWalletOptionSelect}
+          />
+        )}
+      </div>
+    </>
   );
 }
