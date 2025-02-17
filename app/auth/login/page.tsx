@@ -1,7 +1,6 @@
-// File: app/auth/login.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,18 +11,44 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
   const supabase = createClient();
 
+  // Check if user is already logged in
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        router.replace('/');
+      }
+    };
+    checkSession();
+  }, [router, supabase.auth]);
+
   const handleLogin = async () => {
-    setError('');
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      setError(error.message);
-    } else {
-      router.refresh();
-      router.replace('/');
+    try {
+      setError('');
+      setLoading(true);
       
+      const { error: signInError } = await supabase.auth.signInWithPassword({ 
+        email, 
+        password 
+      });
+
+      if (signInError) {
+        setError(signInError.message);
+        return;
+      }
+
+      // Force a hard reload to ensure all auth states are updated
+      window.location.href = '/';
+      
+    } catch (err) {
+      setError('An unexpected error occurred');
+      console.error('Login error:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -42,6 +67,7 @@ export default function LoginPage() {
         value={email}
         onChange={(e) => setEmail(e.target.value)}
         className="mb-4"
+        disabled={loading}
       />
       <Input
         type="password"
@@ -49,8 +75,14 @@ export default function LoginPage() {
         value={password}
         onChange={(e) => setPassword(e.target.value)}
         className="mb-4"
+        disabled={loading}
       />
-      <Button onClick={handleLogin}>Login</Button>
+      <Button 
+        onClick={handleLogin} 
+        disabled={loading}
+      >
+        {loading ? 'Logging in...' : 'Login'}
+      </Button>
     </div>
   );
 }
