@@ -42,7 +42,7 @@ export const CONSTANTS = {
         rpcUrls: ["https://rpc-amoy.polygon.technology"],
         blockExplorerUrls: ["https://amoy.polygonscan.com"],
         source_contract: "0x2dc2EC47f46a2f3b42539Df61e6ABD6Acf4aeA29",
-        destination_contract: ""
+        destination_contract: "0x90389878bB9383A39A8cA5fE3d91FBE73F947b7A"
       },
       BASE_SEPOLIA: {
         chainId: "0x14a34",
