@@ -8,22 +8,21 @@ import { Session } from "@supabase/supabase-js";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { setWalletAddress, setBalance } from "@/redux/walletSlice";
 import { RootState } from "@/redux/store";
-import { BrowserProvider, formatUnits } from "ethers";
-import { Wallet, Home, User, History } from "lucide-react";
+import { BrowserProvider } from "ethers";
+import { Wallet, Home, User, History, Menu, X } from "lucide-react";
 import WalletModal from "./WalletModal";
 import {
   fetchTokenBalances,
   fetchTransactionsFromEtherscan,
 } from "@/utils/walletUtils";
 import { CONSTANTS } from "@/lib/constants";
-import { Token, Transaction, ChainInfo } from "@/types/walletTypes";
-import WalletSelector from "./WalletSelector"; // Add this import
+import { Token, Transaction } from "@/types/walletTypes";
+import WalletSelector from "./WalletSelector";
 import Logo from "./Logo";
 
 interface WalletOption {
   name: string;
   id: string;
-  // You can add an icon or other metadata here if needed.
 }
 
 export default function NavBar() {
@@ -34,6 +33,7 @@ export default function NavBar() {
   const [transactionHistory, setTransactionHistory] = useState<Transaction[]>(
     []
   );
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const supabase = createClient();
   const router = useRouter();
@@ -44,13 +44,8 @@ export default function NavBar() {
 
   const chainList = CONSTANTS.AVAILABLE_CHAINS;
 
-  // List of available wallet options
-  const walletOptions: WalletOption[] = [
-    { name: "MetaMask", id: "metamask" },
-    // Add additional wallets as needed, e.g. WalletConnect, Coinbase Wallet, etc.
-  ];
+  const walletOptions: WalletOption[] = [{ name: "MetaMask", id: "metamask" }];
 
-  // Fetch token balances and transactions whenever the wallet address changes
   useEffect(() => {
     const fetchData = async () => {
       if (address && window.ethereum) {
@@ -64,7 +59,6 @@ export default function NavBar() {
     fetchData();
   }, [address, chain]);
 
-  // Calculate the total USD value from token balances and update the balance slice
   useEffect(() => {
     if (tokenBalance.length > 0) {
       const totalUsd = tokenBalance.reduce((acc, token) => {
@@ -74,7 +68,6 @@ export default function NavBar() {
     }
   }, [tokenBalance, dispatch]);
 
-  // Listen to session changes
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -92,7 +85,6 @@ export default function NavBar() {
     return () => subscription.unsubscribe();
   }, [supabase, router]);
 
-  // Function to handle connection via MetaMask
   const connectMetaMask = async () => {
     if (!window.ethereum) {
       alert("Please install MetaMask!");
@@ -104,14 +96,12 @@ export default function NavBar() {
       const signer = await provider.getSigner();
       const walletAddress = await signer.getAddress();
       dispatch(setWalletAddress(walletAddress));
-      // Wallet options modal can be closed after connection
       setShowWalletOptions(false);
     } catch (error) {
       console.error("Error connecting MetaMask:", error);
     }
   };
 
-  // When the "Connect Wallet" button is clicked, show the wallet options modal
   const handleConnectWalletClick = () => {
     setShowWalletOptions(true);
   };
@@ -126,7 +116,6 @@ export default function NavBar() {
           }
           await connectMetaMask();
           break;
-
         default:
           alert(`${option.name} integration coming soon!`);
       }
@@ -138,14 +127,83 @@ export default function NavBar() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-     // Clear any app state
-      dispatch(setWalletAddress(''));
-      dispatch(setBalance(0));
-      
-      // Force a hard reload to clear all states
-      window.location.href = '/auth/login';
-
+    dispatch(setWalletAddress(""));
+    dispatch(setBalance(0));
+    window.location.href = "/auth/login";
   };
+
+  const MobileMenu = () => (
+    <div
+      className={`md:hidden fixed inset-0 z-50 transform ${
+        isMobileMenuOpen ? "translate-x-0" : "translate-x-full"
+      } transition-transform duration-300 ease-in-out`}
+    >
+      <div className="absolute inset-0 bg-gray-900/95">
+        <div className="flex flex-col h-full p-4">
+          <div className="flex justify-between items-center mb-8">
+            <Logo />
+            <button
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="text-gray-300 hover:text-white"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+          <div className="flex flex-col gap-4">
+            <Link
+              href="/"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="px-4 py-3 rounded-lg text-base font-medium text-gray-300 hover:text-white hover:bg-gray-800/50 transition-all flex items-center gap-3"
+            >
+              <Home className="w-5 h-5" />
+              Home
+            </Link>
+            <Link
+              href="/profile"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="px-4 py-3 rounded-lg text-base font-medium text-gray-300 hover:text-white hover:bg-gray-800/50 transition-all flex items-center gap-3"
+            >
+              <User className="w-5 h-5" />
+              Profile
+            </Link>
+            <Link
+              href="/transactions"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="px-4 py-3 rounded-lg text-base font-medium text-gray-300 hover:text-white hover:bg-gray-800/50 transition-all flex items-center gap-3"
+            >
+              <History className="w-5 h-5" />
+              Transactions
+            </Link>
+
+            {/* Logout Button for Mobile */}
+            <button
+              onClick={() => {
+                handleLogout();
+                setIsMobileMenuOpen(false);
+              }}
+              className="mt-4 px-4 py-3 rounded-lg text-base font-medium text-red-500 hover:text-red-400 hover:bg-red-500/10 transition-all flex items-center gap-3"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="w-5 h-5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+              Logout
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <>
@@ -188,50 +246,43 @@ export default function NavBar() {
               </div>
 
               {/* Right side - Auth Buttons */}
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 md:gap-4">
                 {session ? (
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 md:gap-3">
                     {!isConnected ? (
                       <Button
                         onClick={handleConnectWalletClick}
-                        className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium py-2 px-4 rounded-lg flex items-center gap-2 transition-all transform hover:scale-105"
+                        className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium py-2 px-3 md:px-4 rounded-lg flex items-center gap-2 transition-all transform hover:scale-105"
                       >
                         <Wallet className="w-4 h-4" />
-                        Connect Wallet
+                        <span className="hidden md:inline">Connect Wallet</span>
                       </Button>
                     ) : (
                       <Button
                         onClick={() => setIsWalletOpen(!isWalletOpen)}
-                        className="bg-gray-800 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg flex items-center gap-2 transition-all border border-gray-700"
+                        className="bg-gray-800 hover:bg-gray-700 text-white font-medium py-2 px-3 md:px-4 rounded-lg flex items-center gap-2 transition-all border border-gray-700"
                       >
                         <Wallet className="w-4 h-4" />
-                        Wallet
+                        <span className="hidden md:inline">Wallet</span>
                       </Button>
                     )}
                     <Button
                       onClick={handleLogout}
                       variant="destructive"
-                      className="rounded-lg"
+                      className="rounded-lg hidden md:flex"
                     >
                       Logout
                     </Button>
-
-                    {isConnected && (
-                      <WalletModal
-                        isOpen={isWalletOpen}
-                        onClose={() => setIsWalletOpen(false)}
-                        address={address}
-                        usdBalance={balance.toString()}
-                        tokens={tokenBalance}
-                        transactions={transactionHistory}
-                        chainList={chainList}
-                        currentChain={chain}
-                        handleLogout={handleLogout}
-                      />
-                    )}
+                    <Button
+                      onClick={() => setIsMobileMenuOpen(true)}
+                      className="md:hidden p-2"
+                      variant="ghost"
+                    >
+                      <Menu className="w-6 h-6 text-gray-300" />
+                    </Button>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 md:gap-3">
                     <Link href="/auth/login">
                       <Button
                         variant="ghost"
@@ -252,11 +303,27 @@ export default function NavBar() {
           </nav>
         </div>
 
+        <MobileMenu />
+
         {showWalletOptions && (
           <WalletSelector
             isOpen={showWalletOptions}
             onClose={() => setShowWalletOptions(false)}
             onSelect={handleWalletOptionSelect}
+          />
+        )}
+
+        {isConnected && (
+          <WalletModal
+            isOpen={isWalletOpen}
+            onClose={() => setIsWalletOpen(false)}
+            address={address}
+            usdBalance={balance.toString()}
+            tokens={tokenBalance}
+            transactions={transactionHistory}
+            chainList={chainList}
+            currentChain={chain}
+            handleLogout={handleLogout}
           />
         )}
       </div>
