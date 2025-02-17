@@ -9,12 +9,16 @@ import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { setWalletAddress, setBalance } from "@/redux/walletSlice";
 import { RootState } from "@/redux/store";
 import { BrowserProvider, formatUnits } from "ethers";
-import { Wallet } from "lucide-react";
+import { Wallet, Home, User, History } from "lucide-react";
 import WalletModal from "./WalletModal";
-import { fetchTokenBalances, fetchTransactionsFromEtherscan } from "@/utils/walletUtils";
+import {
+  fetchTokenBalances,
+  fetchTransactionsFromEtherscan,
+} from "@/utils/walletUtils";
 import { CONSTANTS } from "@/lib/constants";
 import { Token, Transaction, ChainInfo } from "@/types/walletTypes";
-import WalletSelector from './WalletSelector';  // Add this import
+import WalletSelector from "./WalletSelector"; // Add this import
+import Logo from "./Logo";
 
 interface WalletOption {
   name: string;
@@ -27,7 +31,9 @@ export default function NavBar() {
   const [isWalletOpen, setIsWalletOpen] = useState(false);
   const [showWalletOptions, setShowWalletOptions] = useState(false);
   const [tokenBalance, setTokenBalance] = useState<Token[]>([]);
-  const [transactionHistory, setTransactionHistory] = useState<Transaction[]>([]);
+  const [transactionHistory, setTransactionHistory] = useState<Transaction[]>(
+    []
+  );
 
   const supabase = createClient();
   const router = useRouter();
@@ -56,7 +62,7 @@ export default function NavBar() {
       }
     };
     fetchData();
-  }, [address,chain]);
+  }, [address, chain]);
 
   // Calculate the total USD value from token balances and update the balance slice
   useEffect(() => {
@@ -113,43 +119,14 @@ export default function NavBar() {
   const handleWalletOptionSelect = async (option: WalletOption) => {
     try {
       switch (option.id) {
-        case 'metamask':
+        case "metamask":
           if (!window.ethereum?.isMetaMask) {
-            window.open('https://metamask.io/download/', '_blank');
+            window.open("https://metamask.io/download/", "_blank");
             return;
           }
           await connectMetaMask();
           break;
-          
-        // case 'coinbase':
-        //   if (!window.ethereum?.isCoinbaseWallet) {
-        //     window.open('https://www.coinbase.com/wallet/download', '_blank');
-        //     return;
-        //   }
-        //   await connectCoinbaseWallet();
-        //   break;
-          
-        // case 'walletconnect':
-        //   // Implement WalletConnect connection
-        //   alert('WalletConnect integration coming soon!');
-        //   break;
-          
-        // case 'phantom':
-        //   if (!window.solana?.isPhantom) {
-        //     window.open('https://phantom.app/', '_blank');
-        //     return;
-        //   }
-        //   await connectPhantom();
-        //   break;
-          
-        // case 'trust':
-        //   if (!window.ethereum?.isTrust) {
-        //     window.open('https://trustwallet.com/browser-extension', '_blank');
-        //     return;
-        //   }
-        //   await connectTrustWallet();
-        //   break;
-          
+
         default:
           alert(`${option.name} integration coming soon!`);
       }
@@ -164,70 +141,104 @@ export default function NavBar() {
   };
 
   return (
-    <nav className="bg-gray-900 text-white px-6 py-4 flex justify-between items-center relative">
-      <div className="flex items-center gap-6">
-        {session && (
-          <>
-            <Link href="/" className="text-sm font-medium hover:text-gray-300">
-              Home
-            </Link>
-            <Link href="/profile" className="text-sm font-medium hover:text-gray-300">
-              Profile
-            </Link>
-            <Link href="/transactions" className="text-sm font-medium hover:text-gray-300">
-              Transactions
-            </Link>
-          </>
-        )}
-      </div>
-
-      <div className="flex items-center gap-4">
-        {session ? (
-          !isConnected ? (
-            <Button
-              onClick={handleConnectWalletClick}
-              variant="outline"
-              className="flex items-center gap-2"
-            >
-              <Wallet className="w-4 h-4" />
-              Connect Wallet
-            </Button>
-          ) : (
-            <div className="relative inline-block">
-              <Button
-                onClick={() => setIsWalletOpen(!isWalletOpen)}
-                variant="outline"
-                className="flex items-center gap-2"
-              >
-                <Wallet className="w-4 h-4" />
-                Wallet
-              </Button>
-              <WalletModal
-                isOpen={isWalletOpen}
-                onClose={() => setIsWalletOpen(false)}
-                address={address}
-                usdBalance={balance.toString()}
-                tokens={tokenBalance}
-                transactions={transactionHistory}
-                chainList={chainList}
-                currentChain={chain}
-                handleLogout={handleLogout}
-              />
+    <>
+    {/* Add a spacer div to push content down */}
+    <div className="h-16" />
+    
+    {/* Navbar */}
+    <div className="fixed top-0 left-0 right-0 z-50">
+      <div className="backdrop-blur-md bg-gray-900/80 border-b border-gray-800/50 shadow-lg">
+        <nav className="px-4">
+          {/* Rest of the navbar content remains the same */}
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center gap-8">
+              <Link href="/" className="flex-shrink-0">
+                <Logo />
+              </Link>
+              
+              {session && (
+                <div className="hidden md:flex items-center gap-1">
+                  <Link 
+                    href="/" 
+                    className="px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800/50 transition-all flex items-center gap-2"
+                  >
+                    <Home className="w-4 h-4" />
+                    Home
+                  </Link>
+                  <Link 
+                    href="/profile" 
+                    className="px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800/50 transition-all flex items-center gap-2"
+                  >
+                    <User className="w-4 h-4" />
+                    Profile
+                  </Link>
+                  <Link 
+                    href="/transactions" 
+                    className="px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800/50 transition-all flex items-center gap-2"
+                  >
+                    <History className="w-4 h-4" />
+                    Transactions
+                  </Link>
+                </div>
+              )}
             </div>
-          )
-        ) : (
-          <>
-            <Link href="/auth/login">
-              <Button variant="ghost">Login</Button>
-            </Link>
-            <Link href="/auth/register">
-              <Button variant="outline">Register</Button>
-            </Link>
-          </>
-        )}
+
+            <div className="flex items-center gap-4">
+              {session ? (
+                !isConnected ? (
+                  <Button
+                    onClick={handleConnectWalletClick}
+                    className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium py-2 px-4 rounded-lg flex items-center gap-2 transition-all transform hover:scale-105"
+                  >
+                    <Wallet className="w-4 h-4" />
+                    Connect Wallet
+                  </Button>
+                ) : (
+                  <div className="relative inline-block">
+                    <Button
+                      onClick={() => setIsWalletOpen(!isWalletOpen)}
+                      className="bg-gray-800 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg flex items-center gap-2 transition-all border border-gray-700"
+                    >
+                      <Wallet className="w-4 h-4" />
+                      Wallet
+                    </Button>
+                    <WalletModal
+                      isOpen={isWalletOpen}
+                      onClose={() => setIsWalletOpen(false)}
+                      address={address}
+                      usdBalance={balance.toString()}
+                      tokens={tokenBalance}
+                      transactions={transactionHistory}
+                      chainList={chainList}
+                      currentChain={chain}
+                      handleLogout={handleLogout}
+                    />
+                  </div>
+                )
+              ) : (
+                <div className="flex items-center gap-3">
+                  <Link href="/auth/login">
+                    <Button 
+                      variant="ghost" 
+                      className="text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-lg transition-all"
+                    >
+                      Login
+                    </Button>
+                  </Link>
+                  <Link href="/auth/register">
+                    <Button 
+                      className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium rounded-lg transition-all transform hover:scale-105"
+                    >
+                      Register
+                    </Button>
+                  </Link>
+                </div>
+              )}
+            </div>
+          </div>
+        </nav>
       </div>
 
-      {/* Wallet Options Modal */}
       {showWalletOptions && (
         <WalletSelector
           isOpen={showWalletOptions}
@@ -235,6 +246,7 @@ export default function NavBar() {
           onSelect={handleWalletOptionSelect}
         />
       )}
-    </nav>
+    </div>
+  </>
   );
 }
